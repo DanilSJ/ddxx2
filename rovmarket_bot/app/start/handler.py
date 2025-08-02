@@ -10,6 +10,6 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     async with db_helper.session_factory() as session:
-        await add_user(telegram_id=message.from_user.id, session=session)
+        await add_user(telegram_id=message.from_user.id, username=message.from_user.username, session=session)
 
     await message.answer("Добро пожаловать в РовенМаркет! Что вы хотите сделать?", reply_markup=menu_start)
