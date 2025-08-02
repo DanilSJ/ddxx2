@@ -15,7 +15,8 @@ dependencies = [
     "pydantic (>=2.11.7,<3.0.0)",
     "sqlalchemy (>=2.0.42,<3.0.0)",
     "greenlet (>=3.2.3,<4.0.0)",
-    "aiosqlite (>=0.21.0,<0.22.0)"
+    "aiosqlite (>=0.21.0,<0.22.0)",
+    "black (>=25.1.0,<26.0.0)"
 ]
 
 packages = [
