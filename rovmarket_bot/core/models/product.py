@@ -7,16 +7,28 @@ from .base import Base
 class Product(Base):
     __tablename__ = "product"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
     name: Mapped[str] = mapped_column(String)
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    user = relationship("User", back_populates="products")
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"),
+        nullable=False,
+    )
+    user = relationship(
+        "User",
+        back_populates="products",
+    )
 
-    categories = relationship(
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("categories.id"),
+        nullable=False,
+    )
+    category = relationship(
         "Categories",
-        back_populates="product",
-        uselist=False,
+        back_populates="products",
     )
 
     description: Mapped[str] = mapped_column(String)
