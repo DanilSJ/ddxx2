@@ -1,13 +1,18 @@
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, String, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
+from categories import Categories
 from .base import Base
 
 
 class Product(Base):
     __tablename__ = "product"
 
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String)
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    user = relationship("User", back_populates="products")
 
     categories = relationship(
         "Categories",
