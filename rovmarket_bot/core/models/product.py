@@ -1,0 +1,28 @@
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import datetime, timezone
+from .base import Base
+
+
+class Product(Base):
+    __tablename__ = "product"
+
+    name: Mapped[str] = mapped_column(String)
+
+    categories = relationship(
+        "Categories",
+        back_populates="product",
+        uselist=False,
+    )
+
+    description: Mapped[str] = mapped_column(String)
+    photo: Mapped[str] = mapped_column(String)
+    price: Mapped[int | None] = mapped_column(nullable=False)
+    contact: Mapped[str] = mapped_column(String)
+    geo: Mapped[str] = mapped_column(String)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
