@@ -7,4 +7,4 @@ from .base import Base
 class User(Base):
     __tablename__ = "user"
 
-    telegram_id: Mapped[str]
+    telegram_id: Mapped[int]
