@@ -2,7 +2,6 @@ from sqlalchemy import DateTime, String, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from .base import Base
-from product import Product
 
 
 class Categories(Base):
