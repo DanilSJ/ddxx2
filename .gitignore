@@ -54,3 +54,5 @@ rovmarket_bot/.env
 
 # system
 Thumbs.db
+db.sqlite3
+/db.sqlite3
