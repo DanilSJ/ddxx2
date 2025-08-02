@@ -1,0 +1,21 @@
+[project]
+name = "rovmarket-bot"
+version = "0.1.0"
+description = ""
+authors = [
+    { name = "DanilSJ", email = "danilchagarnoy@mail.ru" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.21.0,<4.0.0",
+    "pillow>=11.3.0,<12.0.0"
+]
+
+packages = [
+    { include = "rovmarket_bot" }
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,56 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Poetry
+poetry.lock
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+
+# MacOS
+.DS_Store
+
+# Logs and runtime
+*.log
+*.pid
+
+# Test & coverage
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# MyPy, Pylint, etc.
+.mypy_cache/
+.pyre/
+.cache/
+ruff_cache/
+
+# Jupyter (на всякий случай)
+*.ipynb_checkpoints
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# dotenv
+.env
+.env.*
+
+# system
+Thumbs.db
