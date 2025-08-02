@@ -49,7 +49,7 @@ dist/
 *.egg
 
 # dotenv
-.env
+rovmarket_bot/.env
 .env.*
 
 # system
