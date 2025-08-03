@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, String, Integer, ForeignKey
+from sqlalchemy import DateTime, String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from .base import Base
@@ -26,9 +26,17 @@ class Product(Base):
         ForeignKey("categories.id"),
         nullable=False,
     )
+
     category = relationship(
         "Categories",
         back_populates="products",
+    )
+
+    photos = relationship(
+        "ProductPhoto",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        lazy="joined",
     )
 
     description: Mapped[str] = mapped_column(String)
