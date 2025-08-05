@@ -1,3 +1,5 @@
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from pydantic_settings import BaseSettings
 from pathlib import Path
 from aiogram import Bot
@@ -21,4 +23,6 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-bot = Bot(token=settings.TOKEN)
+bot = Bot(
+    token=settings.TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
+)

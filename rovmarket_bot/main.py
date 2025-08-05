@@ -1,5 +1,14 @@
 import asyncio
 from aiogram import Dispatcher
+from aiogram.exceptions import (
+    TelegramNetworkError,
+    TelegramAPIError,
+    TelegramServerError,
+    TelegramUnauthorizedError,
+    TelegramNotFound,
+    TelegramBadRequest,
+)
+
 from rovmarket_bot.app.start.handler import router as start
 from rovmarket_bot.app.post.handler import router as post
 from rovmarket_bot.core.config import bot, settings
@@ -23,5 +32,17 @@ if __name__ == "__main__":
     print("Starting...")
     try:
         asyncio.run(main())
+    except TelegramNetworkError:
+        print("No internet connection")
+    except TelegramUnauthorizedError:
+        print("No authorization token")
+    except TelegramNotFound:
+        print("No bot token")
+    except TelegramServerError:
+        print("No server connection")
+    except TelegramBadRequest:
+        print("Bad request")
+    except TelegramAPIError:
+        print("No API connection")
     except KeyboardInterrupt:
         print("Exit")

@@ -40,8 +40,7 @@ class Product(Base):
     )
 
     description: Mapped[str] = mapped_column(String)
-    photo: Mapped[str] = mapped_column(String)
-    price: Mapped[int | None] = mapped_column(nullable=False)
+    price: Mapped[int | None] = mapped_column(nullable=True)
     contact: Mapped[str] = mapped_column(String)
 
     geo: Mapped[dict] = mapped_column(JSON)

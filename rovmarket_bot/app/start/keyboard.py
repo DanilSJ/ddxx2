@@ -14,5 +14,7 @@ menu_start = ReplyKeyboardMarkup(
         [
             KeyboardButton(text="⚙️ Настройки"),
         ],
-    ]
+    ],
+    resize_keyboard=True,
+    one_time_keyboard=True,
 )
