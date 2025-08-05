@@ -1,13 +1,18 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+)
 
-menu_start = InlineKeyboardMarkup(inline_keyboard=[
-    [
-        InlineKeyboardButton(text="🔍 Найти объявление",  callback_data="find"),
+menu_start = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="🔍 Найти объявление"),
         ],
-    [
-        InlineKeyboardButton(text="📢 Разместить объявление", callback_data="post"),
-    ],
-    [
-        InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings"),
+        [
+            KeyboardButton(text="📢 Разместить объявление"),
+        ],
+        [
+            KeyboardButton(text="⚙️ Настройки"),
+        ],
     ]
-])
+)

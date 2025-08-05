@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, String, ForeignKey
+from sqlalchemy import DateTime, String, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from .base import Base
@@ -43,7 +43,8 @@ class Product(Base):
     photo: Mapped[str] = mapped_column(String)
     price: Mapped[int | None] = mapped_column(nullable=False)
     contact: Mapped[str] = mapped_column(String)
-    geo: Mapped[str] = mapped_column(String)
+
+    geo: Mapped[dict] = mapped_column(JSON)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
