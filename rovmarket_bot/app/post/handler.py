@@ -24,6 +24,7 @@ class Post(StatesGroup):
     name = State()
     description = State()
     photo = State()
+    photos: list = State()
     price = State()
     contact = State()
     geo = State()
@@ -113,19 +114,35 @@ async def process_name(message: Message, state: FSMContext):
 async def process_description(message: Message, state: FSMContext):
     await state.update_data(description=message.text)
     await message.answer(
-        "📸 Пришлите *до 3 фотографий* для вашего объявления.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅"
+        "📸 Пришлите *до 10 фотографий* для вашего объявления.\n\n⚠️ *Важно:* фото нужно отправлять *по одному* сообщению.\n\n📌 Когда вы отправляете несколько фото, Telegram может предложить *сгруппировать их в альбом* — ❗ *снимите галочку «Альбом»*, чтобы отправить фото раздельно.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅"
     )
+
     await state.update_data(photos=[])
     await state.set_state(Post.photo)
 
 
-@router.message(Post.photo, F.content_type == ContentType.PHOTO)
-async def process_photo(message: Message, state: FSMContext):
+@router.message(Post.photo, F.photo)
+async def process_photo(
+    message: Message,
+    state: FSMContext,
+):
     data = await state.get_data()
-    photos = data.get("photos", [])
-    if len(photos) >= 3:
+    photos = data.get("photos")
+
+    # Получаем file_id самого большого фото
+    photo_id = message.photo[-1].file_id
+
+    # Добавляем фото, если ещё не больше 10
+    if len(photos) < 10:
+
+        photos.append(photo_id)
+
+        photos = photos[:10]
+
+        await state.update_data(photos=photos)
+        print(photos)
         await message.answer(
-            f"✅ Фото {len(photos)} принято.\nМожете отправить ещё или нажмите «Подтвердить» ⬇️",
+            f"✅ Фото {len(photos)} принято. Можно отправить еще или нажмите 'Подтвердить'",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -136,25 +153,25 @@ async def process_photo(message: Message, state: FSMContext):
                 ]
             ),
         )
-        return
-    photo_id = message.photo[-1].file_id
-
-    photos.append(photo_id)
-    await state.update_data(photos=photos)
-    await message.answer(
-        f"Фото {len(photos)} принято. Можно отправить еще или нажмите 'Подтвердить'",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="Подтвердить", callback_data="photos_done")]
-            ]
-        ),
-    )
+    else:
+        await message.answer(
+            f"📸 Вы уже добавили 10 фото. Нажмите «Подтвердить» ⬇️",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="✅ Подтвердить", callback_data="photos_done"
+                        )
+                    ]
+                ]
+            ),
+        )
 
 
 @router.message(Post.photo)
 async def photo_other_messages(message: Message):
     await message.answer(
-        "📷 Пожалуйста, отправьте фото или нажмите кнопку «Подтвердить» ✅",
+        "📷 Пожалуйста, отправляйте фото *по одному* сообщению.\n\n📌 Если Telegram предлагает *объединить в альбом* — ❗ *уберите галочку*, иначе бот не сможет их обработать.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅:",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
