@@ -14,6 +14,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     CallbackQuery,
 )
+from rovmarket_bot.app.start.keyboard import menu_start
 
 router = Router()
 
@@ -276,9 +277,12 @@ async def finalize_post(message: Message, state: FSMContext):
                 session=session,
             )
         except ValueError as e:
-            await message.answer(f"❌ Произошла ошибка при создании объявления: {e}")
+            await message.answer(
+                f"❌ Произошла ошибка при создании объявления: {e}",
+                reply_markup=menu_start,
+            )
             return
 
-    await message.answer("🎉 Ваше объявление успешно создано!")
+    await message.answer("🎉 Ваше объявление успешно создано!", reply_markup=menu_start)
 
     await state.clear()
