@@ -2,19 +2,29 @@ version: '3.9'
 
 services:
   redis:
-    image: redis:latest
+    image: redis/redis-stack:latest
     container_name: redis
     ports:
-      - "6379:6379"  # проброс порта для доступа снаружи
+      - "6379:6379"
+      - "8001:8001"  # RedisInsight Web UI (по желанию)
+    volumes:
+      - redis-data:/data
+
     restart: unless-stopped
 
   postgres:
-    image: postgres:latest
+    image: postgres:15  # фиксированная версия — лучше для стабильности
     container_name: postgres
     environment:
       POSTGRES_USER: danil
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: danil_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"  # проброс порта для доступа снаружи
+      - "5432:5432"
     restart: unless-stopped
+
+volumes:
+  redis-data:
+  postgres-data:
