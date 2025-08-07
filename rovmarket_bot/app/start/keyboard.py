@@ -12,7 +12,7 @@ menu_start = ReplyKeyboardMarkup(
             KeyboardButton(text="📢 Разместить объявление"),
         ],
         [
-            KeyboardButton(text="Мои объявления"),
+            KeyboardButton(text="📋 Мои объявления"),
         ],
         [
             KeyboardButton(text="⚙️ Настройки"),

@@ -15,6 +15,10 @@ class User(Base):
         "Product", back_populates="user", cascade="all, delete-orphan"
     )
 
+    viewed_products = relationship(
+        "ProductView", back_populates="user", cascade="all, delete-orphan"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

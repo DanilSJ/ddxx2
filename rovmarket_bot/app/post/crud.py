@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from redis.asyncio import Redis
 from rovmarket_bot.core.models import Product, ProductPhoto, User, Categories
+from rovmarket_bot.core.cache import invalidate_all_ads_cache
 
 redis = Redis.from_url("redis://localhost:6379", decode_responses=True)
 
@@ -69,6 +70,7 @@ async def create_product(
         session.add(ProductPhoto(product_id=product.id, photo_url=file_id))
 
     await session.commit()
+    await invalidate_all_ads_cache()
     return product
 
 

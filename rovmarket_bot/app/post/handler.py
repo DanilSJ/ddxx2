@@ -15,8 +15,14 @@ from aiogram.types import (
     CallbackQuery,
 )
 from rovmarket_bot.app.start.keyboard import menu_start
+from .keyboard import contractual, contact
+import re
+from rovmarket_bot.core.censorship.bad_words.en import text as bad_words_en
+from rovmarket_bot.core.censorship.bad_words.ru import text as bad_words_ru
 
 router = Router()
+
+CONTACT_REGEX = r"^(?:\+7\d{10}|\+380\d{9}|\+8\d{10}|@[\w\d_]{5,32}|[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)$"
 
 
 class Post(StatesGroup):
@@ -28,6 +34,28 @@ class Post(StatesGroup):
     price = State()
     contact = State()
     geo = State()
+
+
+async def clean_phone(text: str) -> str:
+    """Очистка вручную введённого номера от лишних символов."""
+    return (
+        "+" + re.sub(r"[^\d]", "", text) if "+" in text else re.sub(r"[^\d]", "", text)
+    )
+
+
+ALL_BAD_WORDS = [
+    line.strip().lower()
+    for line in (bad_words_en + "\n" + bad_words_ru).splitlines()
+    if line.strip()
+]
+
+
+def contains_profanity(text: str) -> bool:
+    text_lower = text.lower()
+    for word in ALL_BAD_WORDS:
+        if word in text_lower:
+            return True
+    return False
 
 
 async def send_category_page(message_or_callback, state: FSMContext, page: int):
@@ -105,6 +133,12 @@ async def process_categories(message: Message, state: FSMContext):
 
 @router.message(Post.name)
 async def process_name(message: Message, state: FSMContext):
+    if contains_profanity(message.text):
+        await message.answer(
+            "🚫 В названии обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
+        )
+        return
+
     await state.update_data(name=message.text)
     await message.answer("📝 Теперь введите *описание* вашего объявления:")
     await state.set_state(Post.description)
@@ -112,11 +146,20 @@ async def process_name(message: Message, state: FSMContext):
 
 @router.message(Post.description)
 async def process_description(message: Message, state: FSMContext):
+    if contains_profanity(message.text):
+        await message.answer(
+            "🚫 В описании обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
+        )
+        return
+
     await state.update_data(description=message.text)
     await message.answer(
-        "📸 Пришлите *до 10 фотографий* для вашего объявления.\n\n⚠️ *Важно:* фото нужно отправлять *по одному* сообщению.\n\n📌 Когда вы отправляете несколько фото, Telegram может предложить *сгруппировать их в альбом* — ❗ *снимите галочку «Альбом»*, чтобы отправить фото раздельно.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅"
+        "📸 Пришлите *до 10 фотографий* для вашего объявления.\n\n"
+        "📌 Вы можете отправлять фото как по одному, так и сразу в виде альбома.\n\n"
+        "⚠️ *Важно:* запрещён любой контент 18+, насилие, агрессия, оскорбления и другие неприемлемые материалы — такие фото будут удаляться, а аккаунт может быть заблокирован.\n\n"
+        "📍 Пожалуйста, отправляйте только качественные и релевантные вашему объявлению фотографии.\n\n"
+        "✅ Когда закончите, нажмите кнопку «Подтвердить»"
     )
-
     await state.update_data(photos=[])
     await state.set_state(Post.photo)
 
@@ -125,47 +168,35 @@ async def process_description(message: Message, state: FSMContext):
 async def process_photo(
     message: Message,
     state: FSMContext,
+    album_messages: list[Message] | None = None,  # middleware передаст сюда список фото
 ):
     data = await state.get_data()
-    photos = data.get("photos")
+    photos = data.get("photos", [])
 
-    # Получаем file_id самого большого фото
-    photo_id = message.photo[-1].file_id
+    messages = album_messages if album_messages else [message]
 
-    # Добавляем фото, если ещё не больше 10
-    if len(photos) < 10:
+    for msg in messages:
+        if len(photos) >= 10:
+            await message.answer("📸 Вы уже добавили 10 фото. Нажмите «Подтвердить» ⬇️")
+            break
 
+        photo_id = msg.photo[-1].file_id
         photos.append(photo_id)
 
-        photos = photos[:10]
+    await state.update_data(photos=photos)
 
-        await state.update_data(photos=photos)
-
-        await message.answer(
-            f"✅ Фото {len(photos)} принято. Можно отправить еще или нажмите 'Подтвердить'",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="✅ Подтвердить", callback_data="photos_done"
-                        )
-                    ]
+    await message.answer(
+        f"✅ Фото добавлено ({len(photos)}/10). Можно отправить ещё или нажмите 'Подтвердить'",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Подтвердить", callback_data="photos_done"
+                    )
                 ]
-            ),
-        )
-    else:
-        await message.answer(
-            f"📸 Вы уже добавили 10 фото. Нажмите «Подтвердить» ⬇️",
-            reply_markup=InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="✅ Подтвердить", callback_data="photos_done"
-                        )
-                    ]
-                ]
-            ),
-        )
+            ]
+        ),
+    )
 
 
 @router.message(Post.photo)
@@ -193,7 +224,8 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
         return
     await callback.message.edit_reply_markup()
     await callback.message.answer(
-        "💰 Укажите *цену* для вашего объявления (только цифры):"
+        "💰 Укажите *цену* в рублях для вашего объявления (только цифры)\n💡 Если хотите указать *договорную* цену, нажмите кнопку ниже ⬇️",
+        reply_markup=contractual,
     )
     await state.set_state(Post.price)
     await callback.answer()
@@ -207,15 +239,13 @@ async def process_price(message: Message, state: FSMContext):
 
     await state.update_data(price=int(message.text))
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Договорная", callback_data="price_negotiable")]
-        ]
-    )
-
     await message.answer(
-        "💡 Если хотите указать *договорную* цену, нажмите кнопку ниже ⬇️\n\nИли просто отправьте контактные данные 📞:",
-        reply_markup=keyboard,
+        "**📞 Пожалуйста, отправьте ваши контактные данные:**\n\n"
+        "— Номер телефона (начиная с `+7`, `+380` или `+8`)\n"
+        "— Email (например, `example@mail.com`)\n"
+        "— Telegram username (начиная с `@`, например `@username`)\n\n"
+        "Чтобы быстро поделиться номером, нажмите кнопку «📱 Отправить номер телефона» ниже 👇",
+        reply_markup=contact,
     )
     await state.set_state(Post.contact)
 
@@ -223,17 +253,50 @@ async def process_price(message: Message, state: FSMContext):
 @router.callback_query(lambda c: c.data == "price_negotiable")
 async def price_negotiable_callback(callback: CallbackQuery, state: FSMContext):
     await state.update_data(price="Договорная цена")
-    await callback.message.edit_reply_markup()  # убираем inline кнопки
+    await callback.message.edit_reply_markup()
     await callback.message.answer(
-        "🤝 Цена установлена как *договорная*.\nТеперь введите контактные данные (телефон, email и т.п.) 📱:"
+        "**🤝 Цена установлена как *договорная*.**\n\n"
+        "Теперь укажите, как с вами можно связаться:\n"
+        "— Телефон (`+7`, `+380`, `+8`)\n"
+        "— Email (`example@mail.com`)\n"
+        "— Telegram (`@username`)\n\n"
+        "Или нажмите кнопку «📱 Отправить номер телефона» ниже 👇",
+        reply_markup=contact,
     )
     await state.set_state(Post.contact)
-    await callback.answer()  # чтобы убрать "часики" у кнопки
+    await callback.answer()
 
 
 @router.message(Post.contact)
 async def process_contact(message: Message, state: FSMContext):
-    await state.update_data(contact=message.text)
+    # ✅ Если номер получен через кнопку — сохраняем без проверки
+    if message.contact:
+        await state.update_data(contact=message.contact.phone_number)
+
+    # ✍️ Если введено вручную — очищаем и проверяем
+    elif message.text:
+        raw = message.text.strip()
+        cleaned = await clean_phone(raw) if raw.startswith("+") else raw
+
+        if not re.match(CONTACT_REGEX, cleaned):
+            await message.answer(
+                "❌ *Неверный формат контактных данных.*\n\n"
+                "Пожалуйста, отправьте один из следующих вариантов:\n"
+                "• Телефон (начиная с `+7`, `+380` или `+8`, например `+79591166234`)\n"
+                "• Email (например, `example@mail.com`)\n"
+                "• Telegram username (начиная с `@`, например `@yourname`)"
+            )
+            return
+
+        await state.update_data(contact=cleaned)
+
+    else:
+        await message.answer(
+            "❌ Не удалось получить контактные данные. Попробуйте снова."
+        )
+        return
+
+    # Геолокация — следующий шаг
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="Отправить геолокацию", request_location=True)],
@@ -242,6 +305,7 @@ async def process_contact(message: Message, state: FSMContext):
         resize_keyboard=True,
         one_time_keyboard=True,
     )
+
     await message.answer(
         "📍 Отправьте свою *геолокацию* или нажмите кнопку «Пропустить геолокацию» 👇",
         reply_markup=keyboard,

@@ -8,7 +8,7 @@ from rovmarket_bot.core.models import Product, ProductPhoto
 
 redis_cache = Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-CACHE_TIMEOUT = 60 * 60  # 1 час
+CACHE_TIMEOUT = 600
 
 
 async def get_categories_page_cached(
@@ -40,7 +40,7 @@ async def get_all_ads_cached(session: AsyncSession) -> dict:
 
     stmt = select(Product.id).order_by(Product.id.desc())
     result = await session.execute(stmt)
-    product_ids = [row[0] for row in result.all()]
+    product_ids = [str(row[0]) for row in result.all()]  # <--- ID сразу как строки
 
     if not product_ids:
         return {"product_ids": [], "products": {}, "photos": {}}
@@ -53,30 +53,34 @@ async def get_all_ads_cached(session: AsyncSession) -> dict:
         Product.contact,
         Product.geo,
         Product.created_at,
-    ).where(Product.id.in_(product_ids))
+    ).where(
+        Product.id.in_([int(pid) for pid in product_ids])
+    )  # приводим обратно к int
     result = await session.execute(stmt)
     products_data = result.all()
 
     # Получаем фотографии для всех продуктов
-    stmt = select(ProductPhoto).where(ProductPhoto.product_id.in_(product_ids))
+    stmt = select(ProductPhoto).where(
+        ProductPhoto.product_id.in_([int(pid) for pid in product_ids])
+    )
     result = await session.execute(stmt)
     photos = result.scalars().all()
 
     # Группируем фотографии по продуктам
     photos_map = {}
     for photo in photos:
-        photos_map.setdefault(photo.product_id, []).append(photo.photo_url)
+        photos_map.setdefault(str(photo.product_id), []).append(photo.photo_url)
 
     display_data = {
-        "product_ids": [str(pid) for pid in product_ids],
+        "product_ids": product_ids,
         "products": {},
         "photos": {},
     }
 
     for product_row in products_data:
         product_id, name, description, price, contact, geo, created_at = product_row
+        product_id = str(product_id)  # <--- приведение к строке
 
-        # Проверяем, что данные не None
         product_data = {
             "name": name or "Без названия",
             "description": description or "Без описания",
@@ -87,12 +91,9 @@ async def get_all_ads_cached(session: AsyncSession) -> dict:
         }
         display_data["products"][product_id] = product_data
 
-    # Проверяем данные перед сохранением
-    if display_data["products"]:
-        first_product_id = list(display_data["products"].keys())[0]
-        first_product = display_data["products"][first_product_id]
+    for pid in product_ids:
+        display_data["photos"][pid] = photos_map.get(pid, [])
 
-    # Кэшируем данные
     try:
         json_data = json.dumps(display_data)
         await redis_cache.set(cache_key, json_data, ex=CACHE_TIMEOUT)

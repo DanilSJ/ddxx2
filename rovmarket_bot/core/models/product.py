@@ -1,6 +1,7 @@
 from sqlalchemy import DateTime, String, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
+from .product_view import ProductView
 from .base import Base
 
 
@@ -44,6 +45,10 @@ class Product(Base):
     contact: Mapped[str] = mapped_column(String)
 
     geo: Mapped[dict] = mapped_column(JSON)
+
+    views = relationship(
+        "ProductView", back_populates="product", cascade="all, delete-orphan"
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

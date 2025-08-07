@@ -29,6 +29,9 @@ pagination_keyboard = ReplyKeyboardMarkup(
             KeyboardButton(text="📢 Разместить объявление"),
         ],
         [
+            KeyboardButton(text="📋 Мои объявления"),
+        ],
+        [
             KeyboardButton(text="⚙️ Настройки"),
         ],
     ],

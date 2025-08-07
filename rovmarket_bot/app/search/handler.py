@@ -80,63 +80,70 @@ async def paginate_ads(message: Message, state: FSMContext):
 
 async def show_ads_page(message: Message, state: FSMContext, page: int):
     async with db_helper.session_factory() as session:
-        # Используем кэшированные данные для всех объявлений
-        from .crud import get_all_ads_data
-
         cached_data = await get_all_ads_data(session)
 
-        product_ids = cached_data["product_ids"]
-        products = cached_data["products"]
-        photos_map = cached_data["photos"]
+        if cached_data:
+            product_ids = cached_data["product_ids"]
+            products = cached_data["products"]
+            photos_map = cached_data["photos"]
 
-        total = len(product_ids)
-        start = page * PAGE_SIZE
-        end = start + PAGE_SIZE
-        page_ids = product_ids[start:end]
+            total = len(product_ids)
+            start = page * PAGE_SIZE
+            end = start + PAGE_SIZE
+            page_ids = product_ids[start:end]
 
-        if not page_ids:
-            await message.answer(
-                "Нет объявлений на этой странице.", reply_markup=pagination_keyboard
-            )
-            return
-
-        for pid in page_ids:
-            product_data = products.get(str(pid), {})
-            name = product_data.get("name", "Без названия")
-            desc = product_data.get("description", "Без описания")
-            if len(desc) > 100:
-                desc = desc[:100] + "..."
-            price = product_data.get("price")
-            if not price:
-                price = "договорная"
-            text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 Цена: {price}"
-            photos = photos_map.get(str(pid), [])
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-            details_markup = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="Подробнее", callback_data=f"details_{pid}"
-                        )
-                    ]
-                ]
-            )
-            if photos:
-                await message.answer_photo(
-                    photos[0], caption=text, reply_markup=details_markup
+            if not page_ids:
+                await message.answer(
+                    "Нет объявлений на этой странице.", reply_markup=pagination_keyboard
                 )
-            else:
-                await message.answer(text, reply_markup=details_markup)
+                return
 
-        await message.answer(
-            f"Страница {page+1} из {((total-1)//PAGE_SIZE)+1}",
-            reply_markup=pagination_keyboard,
-        )
+            for pid in page_ids:
+                product_data = products.get(str(pid), {})
+                name = product_data.get("name", "Без названия")
+                desc = product_data.get("description", "Без описания")
+                if len(desc) > 100:
+                    desc = desc[:100] + "..."
+                price = product_data.get("price")
+                if not price:
+                    price = "договорная"
+                text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 Цена: {price}"
+                photos = photos_map.get(pid, [])
+                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+                details_markup = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="Подробнее", callback_data=f"details:{pid}"
+                            )
+                        ]
+                    ]
+                )
+                if photos:
+                    await message.answer_photo(
+                        photos[0], caption=text, reply_markup=details_markup
+                    )
+                else:
+                    await message.answer(text, reply_markup=details_markup)
+
+            await message.answer(
+                f"Страница {page+1} из {((total-1)//PAGE_SIZE)+1}",
+                reply_markup=pagination_keyboard,
+            )
+        else:
+            await show_ads_page(message, state, 0)
 
 
 @router.message(
-    Search.text, F.text != "Показать все", F.text != "Фильтры", F.text != "Категории"
+    Search.text,
+    F.text != "Показать все",
+    F.text != "Фильтры",
+    F.text != "Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
 )
 async def search_ads(message: Message, state: FSMContext):
     query = message.text
@@ -157,14 +164,12 @@ async def search_ads(message: Message, state: FSMContext):
             price = "договорная"
         text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 {price}"
         photos = item.get("photos", [])
-        # Добавляем inline-кнопку 'Подробнее'
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
         details_markup = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="Подробнее", callback_data=f"details_{product_id}"
+                        text="Подробнее", callback_data=f"details:{product_id}"
                     )
                 ]
             ]
@@ -177,30 +182,46 @@ async def search_ads(message: Message, state: FSMContext):
             await message.answer(text, reply_markup=details_markup)
 
 
-@router.callback_query(F.data.startswith("details_"))
+@router.callback_query(F.data.startswith("details:"))
 async def show_details(callback: CallbackQuery):
-    product_id = int(callback.data.split("_", 1)[1])
+    try:
+        parts = callback.data.split(":")
+        product_id = int(parts[-1])
+    except (ValueError, IndexError):
+        await callback.answer("Ошибка: неверный формат данных.", show_alert=True)
+        return
+
     async with db_helper.session_factory() as session:
         product = await get_product_by_id(product_id, session)
-    if not product:
-        await callback.answer("Данные не найдены", show_alert=True)
-        return
+
+        if not product:
+            await callback.answer("Данные не найдены", show_alert=True)
+            return
+
+        user_id = await get_user_id_by_telegram_id(callback.from_user.id, session)
+        if user_id:
+            await add_product_view(product_id, user_id, session)
 
     name = product.get("name", "Без названия")
     desc = product.get("description", "Без описания")
     if len(desc) > 100:
         desc = desc[:100] + "..."
+
     price = product.get("price") or "договорная"
     contact = product.get("contact", "-")
+
     geo = product.get("geo")
     geo_str = "-"
+    geo_link = None
     if geo and isinstance(geo, dict):
         lat = geo.get("latitude")
         lon = geo.get("longitude")
         if lat is not None and lon is not None:
             geo_str = f"{lat}, {lon}"
+            geo_link = f"https://maps.google.com/?q={lat},{lon}"
 
     created_at = product.get("created_at")
+    created_str = "-"
     if created_at:
         if isinstance(created_at, str):
             try:
@@ -209,17 +230,19 @@ async def show_details(callback: CallbackQuery):
                 created_at = None
         if isinstance(created_at, datetime.datetime):
             created_str = created_at.strftime("%d.%m.%Y")
-        else:
-            created_str = "-"
+
+    # Формируем текст с HTML-разметкой для кликабельной ссылки на геолокацию
+    if geo_link:
+        geo_text = f"<a href='{geo_link}'>Нажми, чтобы открыть карту</a>"
     else:
-        created_str = "-"
+        geo_text = "-"
 
     full_text = (
         f"📌 {name}\n"
         f"💬 {desc}\n"
         f"💰 Цена: {price}\n"
         f"\n📞 Контакт: {contact}\n"
-        f"📍 Геолокация: {geo_str}\n"
+        f"📍 Геолокация: {geo_text}\n"
         f"🕒 Дата создания: {created_str}"
     )
 
@@ -227,41 +250,47 @@ async def show_details(callback: CallbackQuery):
 
     await callback.answer()
 
-    # Кнопка "Просмотреть фотографии" с коллбэком "show_photos_{product_id}"
     photos_button = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="Просмотреть фотографии",
-                    callback_data=f"show_photos_{product_id}",
+                    callback_data=f"show_photos:{product_id}",
                 )
             ]
         ]
     )
 
-    if photos:
-        media = InputMediaPhoto(media=photos[0], caption=full_text)
-        try:
-            # Редактируем сообщение — меняем фото и текст, добавляем кнопку просмотра фото
-            await callback.message.edit_media(media=media, reply_markup=photos_button)
-        except Exception:
-            # Если редактирование не удалось — отправляем новое сообщение с кнопкой
-            await callback.message.answer_photo(
-                photos[0], caption=full_text, reply_markup=photos_button
+    try:
+        if photos:
+            media = InputMediaPhoto(
+                media=photos[0], caption=full_text, parse_mode="HTML"
             )
-    else:
-        try:
-            # Если фото нет — редактируем текст с кнопкой
-            await callback.message.edit_text(full_text, reply_markup=photos_button)
-        except Exception:
-            await callback.message.answer(full_text, reply_markup=photos_button)
+            await callback.message.edit_media(media=media, reply_markup=photos_button)
+        else:
+            await callback.message.edit_text(
+                full_text, reply_markup=photos_button, parse_mode="HTML"
+            )
+    except Exception:
+        if photos:
+            await callback.message.answer_photo(
+                photos[0],
+                caption=full_text,
+                reply_markup=photos_button,
+                parse_mode="HTML",
+            )
+        else:
+            await callback.message.answer(
+                full_text, reply_markup=photos_button, parse_mode="HTML"
+            )
 
 
-@router.callback_query(F.data.startswith("show_photos_"))
+@router.callback_query(F.data.startswith("show_photos:"))
 async def show_photos(callback: CallbackQuery):
-    product_id = int(callback.data.split("_", 2)[2])
+    product_id = int(callback.data.split(":", 1)[1])
     async with db_helper.session_factory() as session:
         product = await get_product_by_id(product_id, session)
+
     if not product:
         await callback.answer("Данные не найдены", show_alert=True)
         return
@@ -270,15 +299,19 @@ async def show_photos(callback: CallbackQuery):
     desc = product.get("description", "Без описания")
     price = product.get("price") or "договорная"
     contact = product.get("contact", "-")
+
     geo = product.get("geo")
+    geo_link = None
     geo_str = "-"
     if geo and isinstance(geo, dict):
         lat = geo.get("latitude")
         lon = geo.get("longitude")
         if lat is not None and lon is not None:
             geo_str = f"{lat}, {lon}"
+            geo_link = f"https://maps.google.com/?q={lat},{lon}"
 
     created_at = product.get("created_at")
+    created_str = "-"
     if created_at:
         if isinstance(created_at, str):
             try:
@@ -287,32 +320,39 @@ async def show_photos(callback: CallbackQuery):
                 created_at = None
         if isinstance(created_at, datetime.datetime):
             created_str = created_at.strftime("%d.%m.%Y")
-        else:
-            created_str = "-"
+
+    if geo_link:
+        geo_text = f"<a href='{geo_link}'>Нажми, чтобы открыть карту</a>"
     else:
-        created_str = "-"
+        geo_text = "-"
 
     full_text = (
         f"📌 {name}\n"
         f"💬 {desc}\n"
         f"💰 Цена: {price}\n"
         f"\n📞 Контакт: {contact}\n"
-        f"📍 Геолокация: {geo_str}\n"
+        f"📍 Геолокация: {geo_text}\n"
         f"🕒 Дата создания: {created_str}"
     )
 
-    photos = product.get("photos", [])
+    photos = product.get("photos", [])[:10]  # максимум 10 фото
 
-    # Ограничиваем количество фото до 10 (Telegram максимум 10 в медиагруппе)
-    photos = photos[:10]
-
-    if not photos or len(photos) == 1:
-        await callback.answer("Фотографий больше нет", show_alert=True)
+    if not photos:
+        await callback.answer("Фотографий нет", show_alert=True)
+        return
+    if len(photos) == 1:
+        # Если фото одно, просто отправляем с подписью
+        await callback.answer()
+        await callback.message.answer_photo(
+            photos[0], caption=full_text, parse_mode="HTML"
+        )
         return
 
-    # Формируем медиагруппу: первое фото с подписью, остальные — без
-    media_group = [InputMediaPhoto(media=photos[1], caption=full_text)]
-    media_group += [InputMediaPhoto(media=photo) for photo in photos]
+    # Формируем медиагруппу: первое фото с подписью, остальные без
+    media_group = [
+        InputMediaPhoto(media=photos[0], caption=full_text, parse_mode="HTML")
+    ]
+    media_group += [InputMediaPhoto(media=photo) for photo in photos[1:]]
 
     await callback.answer()
     await callback.message.answer_media_group(media_group)
@@ -407,7 +447,7 @@ async def show_products_by_category(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="Подробнее", callback_data=f"details_{pid}"
+                            text="Подробнее", callback_data=f"details:{pid}"
                         )
                     ]
                 ]

@@ -16,12 +16,14 @@ from rovmarket_bot.app.ads.handler import router as ads
 from rovmarket_bot.core.config import bot, settings
 from aiogram.fsm.storage.redis import RedisStorage
 
+from middleware.album_middleware import AlbumMiddleware
 
 storage = RedisStorage.from_url(settings.REDIS_URL)
 dp = Dispatcher(storage=storage)
 
 
 async def main():
+    dp.message.middleware(AlbumMiddleware())
     dp.include_router(start)
     dp.include_router(post)
     dp.include_router(search)

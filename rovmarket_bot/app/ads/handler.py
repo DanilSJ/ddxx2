@@ -27,7 +27,13 @@ class UserAdsState(StatesGroup):
     viewing_ads = State()
 
 
-@router.message(F.text == "Мои объявления")
+@router.message(Command("my_ads"))
+async def cmd_my_ads(message: Message, state: FSMContext):
+    await state.clear()
+    await button_search(message, state)
+
+
+@router.message(F.text == "📋 Мои объявления")
 async def button_search(message: Message, state: FSMContext):
     await state.clear()
 
@@ -63,6 +69,8 @@ async def send_user_products(
         price_text = f"Цена: {product.price} ₽" if product.price else "Цена: Договорная"
         category_text = f"Категория: {product.category.name}"
         date_text = f"Дата: {product.created_at.strftime('%d.%m.%Y %H:%M')}"
+        views_count = len(product.views) if product.views else 0
+        views_text = f"Просмотры: {views_count}"
 
         caption = (
             f"📋 {product.name}\n\n"
@@ -70,7 +78,8 @@ async def send_user_products(
             f"💰 {price_text}\n"
             f"📂 {category_text}\n"
             f"📞 {product.contact}\n"
-            f"📅 {date_text}"
+            f"📅 {date_text}\n"
+            f"👥 {views_text}"
         )
 
         # Отправляем фотографии

@@ -3,6 +3,7 @@ __all__ = [
     "User",
     "Product",
     "ProductPhoto",
+    "ProductView",
     "Categories",
     "db_helper",
     "DatabaseHelper",
@@ -14,3 +15,4 @@ from .user import User
 from .product import Product
 from .categories import Categories
 from .product_photo import ProductPhoto
+from .product_view import ProductView
