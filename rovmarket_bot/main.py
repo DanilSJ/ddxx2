@@ -12,6 +12,7 @@ from aiogram.exceptions import (
 from rovmarket_bot.app.start.handler import router as start
 from rovmarket_bot.app.post.handler import router as post
 from rovmarket_bot.app.search.handler import router as search
+from rovmarket_bot.app.ads.handler import router as ads
 from rovmarket_bot.core.config import bot, settings
 from aiogram.fsm.storage.redis import RedisStorage
 
@@ -24,6 +25,7 @@ async def main():
     dp.include_router(start)
     dp.include_router(post)
     dp.include_router(search)
+    dp.include_router(ads)
 
     await asyncio.gather(
         dp.start_polling(bot),

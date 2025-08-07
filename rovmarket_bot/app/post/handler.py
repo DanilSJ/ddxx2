@@ -140,7 +140,7 @@ async def process_photo(
         photos = photos[:10]
 
         await state.update_data(photos=photos)
-        print(photos)
+
         await message.answer(
             f"✅ Фото {len(photos)} принято. Можно отправить еще или нажмите 'Подтвердить'",
             reply_markup=InlineKeyboardMarkup(

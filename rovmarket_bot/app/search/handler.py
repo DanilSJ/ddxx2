@@ -80,32 +80,37 @@ async def paginate_ads(message: Message, state: FSMContext):
 
 async def show_ads_page(message: Message, state: FSMContext, page: int):
     async with db_helper.session_factory() as session:
-        product_ids = await get_all_product_ids(session)
+        # Используем кэшированные данные для всех объявлений
+        from .crud import get_all_ads_data
+
+        cached_data = await get_all_ads_data(session)
+
+        product_ids = cached_data["product_ids"]
+        products = cached_data["products"]
+        photos_map = cached_data["photos"]
+
         total = len(product_ids)
         start = page * PAGE_SIZE
         end = start + PAGE_SIZE
         page_ids = product_ids[start:end]
+
         if not page_ids:
             await message.answer(
                 "Нет объявлений на этой странице.", reply_markup=pagination_keyboard
             )
             return
-        # Получаем данные для объявлений
-        fields_map = await get_fields_for_products(page_ids, session)
-        photos_map = await get_photos_for_products(page_ids, session)
 
         for pid in page_ids:
-
-            fields = fields_map.get(pid, {})
-            name = fields.get("name", "Без названия")
-            desc = fields.get("description", "Без описания")
+            product_data = products.get(str(pid), {})
+            name = product_data.get("name", "Без названия")
+            desc = product_data.get("description", "Без описания")
             if len(desc) > 100:
                 desc = desc[:100] + "..."
-            price = fields.get("price")
+            price = product_data.get("price")
             if not price:
                 price = "договорная"
             text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 Цена: {price}"
-            photos = photos_map.get(pid, [])
+            photos = photos_map.get(str(pid), [])
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
             details_markup = InlineKeyboardMarkup(
