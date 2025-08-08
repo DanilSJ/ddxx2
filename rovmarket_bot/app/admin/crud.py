@@ -4,6 +4,7 @@ from sqlalchemy import func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from rovmarket_bot.core.models import UserCategoryNotification
 from rovmarket_bot.core.models.user import User
 from rovmarket_bot.core.models.product_view import ProductView
 from rovmarket_bot.core.models.complaint import Complaint
@@ -214,3 +215,20 @@ async def get_all_categories(session: AsyncSession) -> list[Categories]:
 async def delete_category(session: AsyncSession, category_id: int):
     await session.execute(delete(Categories).where(Categories.id == category_id))
     await session.commit()
+
+
+async def get_subscriber_telegram_ids_for_category(
+    session: AsyncSession, category_id: int, exclude_user_id: int | None = None
+) -> list[int]:
+    stmt = (
+        select(User.telegram_id)
+        .join(UserCategoryNotification, User.id == UserCategoryNotification.user_id)
+        .where(UserCategoryNotification.category_id == category_id)
+        .distinct()
+    )
+    if exclude_user_id is not None:
+        stmt = stmt.where(User.id != exclude_user_id)
+    result = await session.execute(stmt)
+    tg_ids = [row[0] for row in result.all()]
+    # Ensure uniqueness at Python level as well
+    return list({tg_id for tg_id in tg_ids if tg_id is not None})

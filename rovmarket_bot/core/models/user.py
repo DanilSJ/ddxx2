@@ -1,4 +1,4 @@
-from sqlalchemy import DateTime, String, Integer
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from .base import Base
@@ -24,6 +24,14 @@ class User(Base):
     )
 
     admin: Mapped[bool] = mapped_column(nullable=True)
+
+    # Many-to-many: categories user subscribed to for notifications
+    subscribed_categories = relationship(
+        "Categories",
+        secondary="user_category_notification",
+        back_populates="subscribed_users",
+        lazy="selectin",
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

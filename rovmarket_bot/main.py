@@ -15,11 +15,12 @@ from rovmarket_bot.app.post.handler import router as post
 from rovmarket_bot.app.search.handler import router as search
 from rovmarket_bot.app.ads.handler import router as ads
 from rovmarket_bot.app.admin.handler import router as admin
+from rovmarket_bot.app.settings.handler import router as settings_router
 from rovmarket_bot.core.config import bot, settings
 from aiogram.fsm.storage.redis import RedisStorage
 
-from middleware.album_middleware import AlbumMiddleware
-from middleware.user_check_middleware import UserCheckMiddleware
+from rovmarket_bot.middleware.album_middleware import AlbumMiddleware
+from rovmarket_bot.middleware.user_check_middleware import UserCheckMiddleware
 
 storage = RedisStorage.from_url(settings.REDIS_URL)
 dp = Dispatcher(storage=storage)
@@ -33,6 +34,8 @@ async def main():
     dp.include_router(search)
     dp.include_router(ads)
     dp.include_router(admin)
+    dp.include_router(settings_router)
+
     await ensure_redis_index()
     await asyncio.gather(
         dp.start_polling(bot),

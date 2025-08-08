@@ -19,6 +19,11 @@ class Categories(Base):
         back_populates="category",
     )
 
+    # Users subscribed to notifications for this category
+    subscribed_users = relationship(
+        "User", secondary="user_category_notification", back_populates="subscribed_categories", lazy="selectin"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

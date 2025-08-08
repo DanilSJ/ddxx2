@@ -18,6 +18,7 @@ from .keyboard import menu_admin, menu_stats, menu_back
 from .states import AdCreationStates
 from rovmarket_bot.core.cache import invalidate_cache_on_new_ad
 from ..search.redis_search import index_product_in_redis
+from rovmarket_bot.core.config import bot
 
 router = Router()
 
@@ -437,6 +438,49 @@ async def approve_ad(callback: CallbackQuery):
 
     await invalidate_cache_on_new_ad()
     await index_product_in_redis(product)
+
+    # Notify subscribers of the product's category
+    try:
+        category_id = product.category_id
+        # Exclude the ad owner from notifications
+        owner_user_id = product.user_id
+        # Query once; don't reuse session used above to avoid accidental expiration
+        async with db_helper.session_factory() as session2:
+            subscriber_tg_ids = await get_subscriber_telegram_ids_for_category(
+                session2, category_id, exclude_user_id=owner_user_id
+            )
+
+        if subscriber_tg_ids:
+            text_lines = [
+                "🆕 Новое объявление в вашей категории!",
+                f"📌 {product.name}",
+            ]
+            if product.price is not None:
+                text_lines.append(f"💰 Цена: {product.price}")
+            if product.description:
+                desc = product.description
+                if len(desc) > 200:
+                    desc = desc[:200] + "…"
+                text_lines.append(f"💬 {desc}")
+            text_lines.append(f"ℹ️ Открыть детали в боте и посмотреть фото")
+            notify_text = "\n".join(text_lines)
+
+            # Try to include first photo if present; otherwise send plain text
+            first_photo = product.photos[0].photo_url if product.photos else None
+            for tg_id in subscriber_tg_ids:
+                try:
+                    if first_photo:
+                        await bot.send_photo(
+                            chat_id=tg_id, photo=first_photo, caption=notify_text
+                        )
+                    else:
+                        await bot.send_message(chat_id=tg_id, text=notify_text)
+                except Exception:
+                    # ignore individual failures to avoid blocking
+                    continue
+    except Exception:
+        # fail-safe: do not break approval flow on notify errors
+        pass
 
     await callback.answer("Объявление принято ✅", show_alert=True)
 

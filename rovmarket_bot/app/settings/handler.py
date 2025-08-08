@@ -1,0 +1,121 @@
+from aiogram import Router, F
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
+from rovmarket_bot.core.models import db_helper
+from rovmarket_bot.app.start.handler import cmd_start
+from .crud import (
+    get_categories_page,
+    is_user_subscribed_to_category,
+    toggle_category_subscription,
+)
+from .keyboard import menu_settings
+
+
+router = Router()
+
+
+@router.message(Command("settings"))
+async def cmd_notifications(message: Message, state: FSMContext):
+    await state.clear()
+    await button_notifications(message, state)
+
+
+@router.message(F.text == "⚙️ Настройки")
+async def button_notifications(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🛠 Настройки бота", reply_markup=menu_settings)
+
+
+@router.message(F.text == "🔔Уведомления")
+async def button_notifications(message: Message, state: FSMContext):
+    await state.clear()
+    await send_notifications_categories(message, state, 1)
+
+
+@router.message(F.text == "📋Меню")
+async def button_menu(message: Message, state: FSMContext):
+    await state.clear()
+    await cmd_start(message, state)
+
+
+async def send_notifications_categories(
+    message_or_callback, state: FSMContext, page: int
+):
+    async with db_helper.session_factory() as session:
+        categories = await get_categories_page(session, page=page)
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+        # For each category, add a toggle button with checkmark if subscribed
+        for cat in categories:
+            subscribed = await is_user_subscribed_to_category(
+                telegram_id=(
+                    message_or_callback.from_user.id
+                    if isinstance(message_or_callback, Message)
+                    else message_or_callback.from_user.id
+                ),
+                category_id=cat.id,
+                session=session,
+            )
+            title = ("✅ " if subscribed else "") + cat.name
+            keyboard.inline_keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=title,
+                        callback_data=f"notif_toggle:{cat.id}:{page}",
+                    )
+                ]
+            )
+
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="⬅️ Назад", callback_data=f"notif_page:{page-1}"
+                )
+            )
+        if len(categories) == 10:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="➡️ Далее", callback_data=f"notif_page:{page+1}"
+                )
+            )
+        if nav_buttons:
+            keyboard.inline_keyboard.append(nav_buttons)
+
+        text = (
+            "🔔 *Выберите категории, по которым хотите получать уведомления о новых объявлениях.*\n\n"
+            "Повторное нажатие — отключение уведомления.\n\n"
+            "Вы всегда можете изменить свой выбор."
+        )
+        if isinstance(message_or_callback, Message):
+            await message_or_callback.answer(text, reply_markup=keyboard)
+        else:
+            await message_or_callback.message.edit_text(text, reply_markup=keyboard)
+
+
+@router.callback_query(F.data.startswith("notif_page:"))
+async def notifications_page(callback: CallbackQuery, state: FSMContext):
+    page = int(callback.data.split(":", 1)[1])
+    await send_notifications_categories(callback, state, page)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("notif_toggle:"))
+async def notifications_toggle(callback: CallbackQuery, state: FSMContext):
+    # format: notif_toggle:<category_id>:<page>
+    parts = callback.data.split(":")
+    category_id = int(parts[1])
+    page = int(parts[2]) if len(parts) > 2 else 1
+    async with db_helper.session_factory() as session:
+        now_sub = await toggle_category_subscription(
+            telegram_id=callback.from_user.id, category_id=category_id, session=session
+        )
+    # Refresh same page to update checkmarks
+    await send_notifications_categories(callback, state, page)
+    await callback.answer("Включены" if now_sub else "Выключены", show_alert=False)
