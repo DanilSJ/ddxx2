@@ -1,16 +1,14 @@
 from aiogram.types import TelegramObject
 from aiogram.dispatcher.middlewares.base import BaseMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from typing import Callable, Awaitable, Dict, Any
-
+from rovmarket_bot.core.models import db_helper
+from rovmarket_bot.app.start.crud import add_user
 from rovmarket_bot.core.models.user import User
 
 
 class UserCheckMiddleware(BaseMiddleware):
-    def __init__(self, sessionmaker):
+    def __init__(self):
         super().__init__()
-        self.sessionmaker = sessionmaker
 
     async def __call__(
         self,
@@ -22,18 +20,10 @@ class UserCheckMiddleware(BaseMiddleware):
         if tg_user is None:
             return await handler(event, data)
 
-        async with self.sessionmaker() as session:
-            result = await session.execute(
-                select(User).where(User.telegram_id == tg_user.id)
+        async with db_helper.session_factory() as session:
+            user: User = await add_user(
+                telegram_id=tg_user.id, username=tg_user.username, session=session
             )
-            user = result.scalars().first()
-
-            if not user:
-                user = User(telegram_id=tg_user.id, username=tg_user.username)
-                session.add(user)
-                await session.commit()
-                await session.refresh(user)
-
             data["user"] = user
 
         return await handler(event, data)

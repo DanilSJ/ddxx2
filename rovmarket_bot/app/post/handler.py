@@ -19,6 +19,7 @@ from .keyboard import contractual, contact
 import re
 from rovmarket_bot.core.censorship.bad_words.en import text as bad_words_en
 from rovmarket_bot.core.censorship.bad_words.ru import text as bad_words_ru
+from rovmarket_bot.app.admin.crud import get_admin_users
 
 router = Router()
 
@@ -357,6 +358,21 @@ async def finalize_post(message: Message, state: FSMContext):
                 data=data,
                 session=session,
             )
+            # Уведомление администраторов о новом объявлении
+            admins = await get_admin_users(session)
+            notify_text = (
+                "🔔 Новое объявление ожидает проверки\n\n"
+                f"ID: {product.id}\n"
+                f"Название: {product.name}\n"
+                f"Цена: {('Договорная' if product.price is None else product.price)}\n\n"
+                "Перейдите в админ-панель для модерации."
+            )
+            for admin in admins:
+                try:
+                    await message.bot.send_message(chat_id=admin.telegram_id, text=notify_text)
+                except Exception:
+                    # Игнорируем ошибки доставки отдельным администраторам
+                    pass
         except ValueError as e:
             await message.answer(
                 f"❌ Произошла ошибка при создании объявления: {e}",
@@ -364,6 +380,9 @@ async def finalize_post(message: Message, state: FSMContext):
             )
             return
 
-    await message.answer("🎉 Ваше объявление успешно создано!", reply_markup=menu_start)
+    await message.answer(
+        "🎉 Ваше объявление успешно создано! В течении 5 минут оно появится",
+        reply_markup=menu_start,
+    )
 
     await state.clear()

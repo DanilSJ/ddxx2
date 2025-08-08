@@ -8,10 +8,6 @@ from .base import Base
 class Product(Base):
     __tablename__ = "product"
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True,
-        autoincrement=True,
-    )
     name: Mapped[str] = mapped_column(String)
 
     user_id: Mapped[int] = mapped_column(
@@ -49,6 +45,8 @@ class Product(Base):
     views = relationship(
         "ProductView", back_populates="product", cascade="all, delete-orphan"
     )
+
+    publication: Mapped[bool] = mapped_column(nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

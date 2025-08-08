@@ -1,3 +1,5 @@
+from sqlalchemy import func
+
 from rovmarket_bot.core.models import (
     ProductView,
     ProductPhoto,
@@ -56,7 +58,6 @@ async def get_fields_for_products(
 
 
 async def get_product_by_id(product_id: int, session: AsyncSession) -> dict | None:
-    # Получаем данные продукта
     stmt = select(
         Product.id,
         Product.name,
@@ -65,7 +66,7 @@ async def get_product_by_id(product_id: int, session: AsyncSession) -> dict | No
         Product.contact,
         Product.geo,
         Product.created_at,
-    ).where(Product.id == product_id)
+    ).where(Product.id == product_id, Product.publication.is_(True))
     result = await session.execute(stmt)
     product_row = result.first()
     if not product_row:
@@ -73,7 +74,6 @@ async def get_product_by_id(product_id: int, session: AsyncSession) -> dict | No
 
     product_id, name, description, price, contact, geo, created_at = product_row
 
-    # Получаем фотографии отдельно
     stmt = select(ProductPhoto.photo_url).where(ProductPhoto.product_id == product_id)
     result = await session.execute(stmt)
     photos = [row[0] for row in result.all()]
@@ -104,12 +104,14 @@ async def get_categories_page(session: AsyncSession, page: int = 1, limit: int =
 async def get_products_by_category(
     session: AsyncSession, category_name: str, page: int = 1, limit: int = 10
 ) -> list[int]:
-    """Получить ID товаров по категории с пагинацией"""
     offset = (page - 1) * limit
     stmt = (
         select(Product.id)
         .join(Categories, Product.category_id == Categories.id)
-        .where(Categories.name == category_name)
+        .where(
+            Categories.name == category_name,
+            Product.publication.is_(True),
+        )
         .order_by(Product.id.desc())
         .offset(offset)
         .limit(limit)
@@ -121,8 +123,6 @@ async def get_products_by_category(
 async def get_total_products_by_category(
     session: AsyncSession, category_name: str
 ) -> int:
-    """Получить общее количество товаров в категории"""
-    from sqlalchemy import func
 
     stmt = (
         select(func.count(Product.id))
@@ -134,8 +134,77 @@ async def get_total_products_by_category(
 
 
 async def get_all_ads_data(session: AsyncSession) -> dict:
-
     return await get_all_ads_cached(session)
+
+
+async def get_publication_for_products(
+    product_ids: list[int], session: AsyncSession
+) -> dict[int, bool]:
+    """Получить словарь product_id -> publication (bool)"""
+    if not product_ids:
+        return {}
+    stmt = select(Product.id, Product.publication).where(Product.id.in_(product_ids))
+    result = await session.execute(stmt)
+
+    return {pid: pub for pid, pub in result.all()}
+
+
+async def get_products_by_category_filtered(
+    session: AsyncSession,
+    category_name: str,
+    *,
+    page: int = 1,
+    limit: int = 10,
+    sort: str | None = None,  # 'new' | 'old'
+    price_min: int | None = None,
+    price_max: int | None = None,
+) -> list[int]:
+    offset = (page - 1) * limit
+    stmt = (
+        select(Product.id)
+        .join(Categories, Product.category_id == Categories.id)
+        .where(
+            Categories.name == category_name,
+            Product.publication.is_(True),
+        )
+    )
+    if price_min is not None:
+        stmt = stmt.where(Product.price.is_(None) | (Product.price >= price_min))
+    if price_max is not None:
+        stmt = stmt.where(Product.price.is_(None) | (Product.price <= price_max))
+
+    if sort == "old":
+        stmt = stmt.order_by(Product.id.asc())
+    else:
+        stmt = stmt.order_by(Product.id.desc())
+
+    stmt = stmt.offset(offset).limit(limit)
+    result = await session.execute(stmt)
+    return [row[0] for row in result.all()]
+
+
+async def get_total_products_by_category_filtered(
+    session: AsyncSession,
+    category_name: str,
+    *,
+    price_min: int | None = None,
+    price_max: int | None = None,
+) -> int:
+    stmt = (
+        select(func.count(Product.id))
+        .join(Categories, Product.category_id == Categories.id)
+        .where(
+            Categories.name == category_name,
+            Product.publication.is_(True),
+        )
+    )
+    if price_min is not None:
+        stmt = stmt.where(Product.price.is_(None) | (Product.price >= price_min))
+    if price_max is not None:
+        stmt = stmt.where(Product.price.is_(None) | (Product.price <= price_max))
+
+    result = await session.execute(stmt)
+    return result.scalar()
 
 
 async def get_user_id_by_telegram_id(

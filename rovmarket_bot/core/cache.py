@@ -38,9 +38,14 @@ async def get_all_ads_cached(session: AsyncSession) -> dict:
     if cached_data:
         return json.loads(cached_data)
 
-    stmt = select(Product.id).order_by(Product.id.desc())
+    # Если кэш отсутствует, получаем данные из базы
+    stmt = (
+        select(Product.id)
+        .where(Product.publication == True)
+        .order_by(Product.id.desc())
+    )
     result = await session.execute(stmt)
-    product_ids = [str(row[0]) for row in result.all()]  # <--- ID сразу как строки
+    product_ids = [str(row[0]) for row in result.all()]  # ID как строки
 
     if not product_ids:
         return {"product_ids": [], "products": {}, "photos": {}}
@@ -53,20 +58,16 @@ async def get_all_ads_cached(session: AsyncSession) -> dict:
         Product.contact,
         Product.geo,
         Product.created_at,
-    ).where(
-        Product.id.in_([int(pid) for pid in product_ids])
-    )  # приводим обратно к int
+    ).where(Product.id.in_([int(pid) for pid in product_ids]))
     result = await session.execute(stmt)
     products_data = result.all()
 
-    # Получаем фотографии для всех продуктов
     stmt = select(ProductPhoto).where(
         ProductPhoto.product_id.in_([int(pid) for pid in product_ids])
     )
     result = await session.execute(stmt)
     photos = result.scalars().all()
 
-    # Группируем фотографии по продуктам
     photos_map = {}
     for photo in photos:
         photos_map.setdefault(str(photo.product_id), []).append(photo.photo_url)
@@ -79,7 +80,7 @@ async def get_all_ads_cached(session: AsyncSession) -> dict:
 
     for product_row in products_data:
         product_id, name, description, price, contact, geo, created_at = product_row
-        product_id = str(product_id)  # <--- приведение к строке
+        product_id = str(product_id)
 
         product_data = {
             "name": name or "Без названия",
@@ -94,9 +95,12 @@ async def get_all_ads_cached(session: AsyncSession) -> dict:
     for pid in product_ids:
         display_data["photos"][pid] = photos_map.get(pid, [])
 
+    # Сохраняем заново в кэш (восстанавливаем)
     try:
         json_data = json.dumps(display_data)
-        await redis_cache.set(cache_key, json_data, ex=CACHE_TIMEOUT)
+        await redis_cache.set(
+            cache_key, json_data, ex=CACHE_TIMEOUT
+        )  # или без ex, если не хочешь TTL
     except Exception as e:
         print(f"❌ Ошибка при сохранении в кэш: {e}")
 

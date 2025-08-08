@@ -4,7 +4,10 @@ __all__ = [
     "Product",
     "ProductPhoto",
     "ProductView",
+    "Complaint",
     "Categories",
+    "Advertisement",
+    "AdPhoto",
     "db_helper",
     "DatabaseHelper",
 ]
@@ -16,3 +19,6 @@ from .product import Product
 from .categories import Categories
 from .product_photo import ProductPhoto
 from .product_view import ProductView
+from .complaint import Complaint
+from .advertisement import Advertisement
+from .advertisement import AdPhoto

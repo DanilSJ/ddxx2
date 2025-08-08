@@ -10,7 +10,12 @@ from aiogram.types import (
     KeyboardButton,
 )
 from .crud import *
-from .keyboard import menu_search, pagination_keyboard
+from .keyboard import (
+    menu_search,
+    pagination_keyboard,
+    build_filter_options_keyboard,
+    build_filter_pagination_keyboard,
+)
 from .redis_search import search_in_redis
 from rovmarket_bot.core.models import db_helper
 import datetime
@@ -24,11 +29,18 @@ PAGE_SIZE = 5
 class Search(StatesGroup):
     text = State()
     category = State()
+    price_min = State()
+    price_max = State()
 
 
 @router.message(Command("search"))
 async def cmd_search(message: Message, state: FSMContext):
     await button_search(message, state)
+
+
+@router.message(Command("filter"))
+async def cmd_filter(message: Message, state: FSMContext):
+    await send_filter_category_page(message, state, 1)
 
 
 @router.message(Command("all_ads"))
@@ -64,6 +76,13 @@ async def button_categories(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Search.category)
     await send_category_page(message, state, 1)
+
+
+@router.message(F.text == "Фильтры")
+async def button_filters(message: Message, state: FSMContext):
+    await state.clear()
+    await state.set_state(Search.category)
+    await send_filter_category_page(message, state, 1)
 
 
 @router.message(F.text.in_(["⬅️", "➡️"]))
@@ -398,6 +417,46 @@ async def send_category_page(message_or_callback, state: FSMContext, page: int):
             await message_or_callback.message.edit_text(text, reply_markup=keyboard)
 
 
+async def send_filter_category_page(message_or_callback, state: FSMContext, page: int):
+    """Отправить страницу категорий для фильтров"""
+    async with db_helper.session_factory() as session:
+        categories = await get_categories_page(session, page=page)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+
+        for cat in categories:
+            keyboard.inline_keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=cat.name, callback_data=f"filter_category:{cat.name}"
+                    )
+                ]
+            )
+
+        # Добавляем кнопки "назад" и "вперед"
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="⬅️ Назад", callback_data=f"filter_category_page:{page-1}"
+                )
+            )
+        if len(categories) == 10:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="➡️ Далее", callback_data=f"filter_category_page:{page+1}"
+                )
+            )
+
+        if nav_buttons:
+            keyboard.inline_keyboard.append(nav_buttons)
+
+        text = "🧭 Выберите категорию для фильтрации:"
+        if isinstance(message_or_callback, Message):
+            await message_or_callback.answer(text, reply_markup=keyboard)
+        else:
+            await message_or_callback.message.edit_text(text, reply_markup=keyboard)
+
+
 async def show_products_by_category(
     message_or_callback, state: FSMContext, category_name: str, page: int
 ):
@@ -512,6 +571,99 @@ async def show_products_by_category(
             )
 
 
+async def show_products_by_category_filtered(
+    message_or_callback,
+    state: FSMContext,
+    category_name: str,
+    page: int,
+    *,
+    sort: str | None = None,
+    price_min: int | None = None,
+    price_max: int | None = None,
+):
+    """Показать товары по категории с учетом сортировки и цены"""
+    async with db_helper.session_factory() as session:
+        product_ids = await get_products_by_category_filtered(
+            session,
+            category_name,
+            page=page,
+            limit=PAGE_SIZE,
+            sort=sort,
+            price_min=price_min,
+            price_max=price_max,
+        )
+        total = await get_total_products_by_category_filtered(
+            session, category_name, price_min=price_min, price_max=price_max
+        )
+
+        if not product_ids:
+            text = f"В категории '{category_name}' нет объявлений на этой странице по заданным фильтрам."
+            keyboard = build_filter_options_keyboard(category_name)
+            if isinstance(message_or_callback, Message):
+                await message_or_callback.answer(text, reply_markup=keyboard)
+            else:
+                await message_or_callback.message.edit_text(text, reply_markup=keyboard)
+            return
+
+        fields_map = await get_fields_for_products(product_ids, session)
+        photos_map = await get_photos_for_products(product_ids, session)
+
+        for pid in product_ids:
+            fields = fields_map.get(pid, {})
+            name = fields.get("name", "Без названия")
+            desc = fields.get("description", "Без описания")
+            if len(desc) > 100:
+                desc = desc[:100] + "..."
+            price = fields.get("price") or "договорная"
+            text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 Цена: {price}"
+            photos = photos_map.get(pid, [])
+
+            details_markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="Подробнее", callback_data=f"details:{pid}"
+                        )
+                    ]
+                ]
+            )
+
+            if isinstance(message_or_callback, Message):
+                if photos:
+                    await message_or_callback.answer_photo(
+                        photos[0], caption=text, reply_markup=details_markup
+                    )
+                else:
+                    await message_or_callback.answer(text, reply_markup=details_markup)
+            else:
+                if photos:
+                    await message_or_callback.message.answer_photo(
+                        photos[0], caption=text, reply_markup=details_markup
+                    )
+                else:
+                    await message_or_callback.message.answer(
+                        text, reply_markup=details_markup
+                    )
+
+        total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+        pagination_kb = build_filter_pagination_keyboard(
+            category_name,
+            page,
+            total_pages,
+            sort=sort,
+            price_min=price_min,
+            price_max=price_max,
+        )
+        info_text = f"📂 Категория: {category_name}\nСтраница {page} из {total_pages} (всего {total} объявлений)"
+
+        if isinstance(message_or_callback, Message):
+            await message_or_callback.answer(info_text, reply_markup=pagination_kb)
+        else:
+            await message_or_callback.message.answer(
+                info_text, reply_markup=pagination_kb
+            )
+
+
 @router.callback_query(F.data.startswith("search_category:"))
 async def handle_category_selection(callback: CallbackQuery, state: FSMContext):
     """Обработчик выбора категории для поиска"""
@@ -519,6 +671,103 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext):
     await state.update_data(selected_category=category_name)
     await show_products_by_category(callback, state, category_name, 1)
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("filter_category:"))
+async def handle_filter_category_selection(callback: CallbackQuery, state: FSMContext):
+    """Выбор категории в режиме фильтров"""
+    category_name = callback.data.split(":", 1)[1]
+    await state.update_data(
+        selected_category=category_name, sort=None, price_min=None, price_max=None
+    )
+    keyboard = build_filter_options_keyboard(category_name)
+    await callback.message.edit_text(
+        f"Категория: {category_name}\nВыберите опции фильтрации:", reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("filter_category_page:"))
+async def handle_filter_category_pagination(callback: CallbackQuery, state: FSMContext):
+    page = int(callback.data.split(":", 1)[1])
+    await send_filter_category_page(callback, state, page)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("filter_show:"))
+async def handle_filter_show(callback: CallbackQuery, state: FSMContext):
+    category_name = callback.data.split(":", 1)[1]
+    keyboard = build_filter_options_keyboard(category_name)
+    await callback.message.edit_text(
+        f"Категория: {category_name}\nВыберите опции фильтрации:", reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("filter_sort:"))
+async def handle_filter_sort(callback: CallbackQuery, state: FSMContext):
+    # format: filter_sort:<new|old>:<category>
+    parts = callback.data.split(":")
+    sort_key = parts[1]
+    category_name = parts[2]
+    await state.update_data(selected_category=category_name, sort=sort_key)
+    await show_products_by_category_filtered(
+        callback, state, category_name, 1, sort=sort_key
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("filter_price:start:"))
+async def handle_filter_price_start(callback: CallbackQuery, state: FSMContext):
+    category_name = callback.data.split(":", 2)[2]
+    await state.update_data(selected_category=category_name)
+    await state.set_state(Search.price_min)
+    await callback.message.edit_text(
+        f"Категория: {category_name}\nВведите минимальную цену (число, 0 — без минимума):"
+    )
+    await callback.answer()
+
+
+@router.message(Search.price_min)
+async def handle_price_min_input(message: Message, state: FSMContext):
+    try:
+        value = int(message.text.strip())
+        if value < 0:
+            raise ValueError
+    except Exception:
+        await message.answer("Введите корректное число (0 или больше)")
+        return
+    await state.update_data(price_min=value if value != 0 else None)
+    await state.set_state(Search.price_max)
+    await message.answer("Введите максимальную цену (число, 0 — без максимума):")
+
+
+@router.message(Search.price_max)
+async def handle_price_max_input(message: Message, state: FSMContext):
+    try:
+        value = int(message.text.strip())
+        if value < 0:
+            raise ValueError
+    except Exception:
+        await message.answer("Введите корректное число (0 или больше)")
+        return
+
+    data = await state.get_data()
+    category_name = data.get("selected_category")
+    sort_key = data.get("sort") or "new"
+    price_min = data.get("price_min")
+    price_max = value if value != 0 else None
+    await state.update_data(price_max=price_max)
+
+    await show_products_by_category_filtered(
+        message,
+        state,
+        category_name,
+        1,
+        sort=sort_key,
+        price_min=price_min,
+        price_max=price_max,
+    )
 
 
 @router.callback_query(F.data.startswith("search_category_page:"))
@@ -545,4 +794,37 @@ async def handle_category_products_pagination(
 async def handle_back_to_categories(callback: CallbackQuery, state: FSMContext):
     """Обработчик возврата к списку категорий для поиска"""
     await send_category_page(callback, state, 1)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("filter_products:"))
+async def handle_filter_products_pagination(callback: CallbackQuery, state: FSMContext):
+    # format: filter_products:<category>:<page>:<sort or ->:<min or ->:<max or ->
+    parts = callback.data.split(":")
+    category_name = parts[1]
+    page = int(parts[2])
+    sort = parts[3] if parts[3] != "-" else None
+    price_min = int(parts[4]) if parts[4] != "-" else None
+    price_max = int(parts[5]) if parts[5] != "-" else None
+    await state.update_data(
+        selected_category=category_name,
+        sort=sort,
+        price_min=price_min,
+        price_max=price_max,
+    )
+    await show_products_by_category_filtered(
+        callback,
+        state,
+        category_name,
+        page,
+        sort=sort,
+        price_min=price_min,
+        price_max=price_max,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "filter_back_to_categories")
+async def handle_filter_back_to_categories(callback: CallbackQuery, state: FSMContext):
+    await send_filter_category_page(callback, state, 1)
     await callback.answer()
