@@ -5,7 +5,7 @@ from aiogram.types import Message
 from rovmarket_bot.core.models import db_helper
 from .keyboard import menu_start
 from .crud import add_user
-from ...core.cache import check_rate_limit
+from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
 
 router = Router()
@@ -15,7 +15,9 @@ logger = get_component_logger("start")
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     logger.info(
-        "/start from user_id=%s username=%s", message.from_user.id, message.from_user.username
+        "/start from user_id=%s username=%s",
+        message.from_user.id,
+        message.from_user.username,
     )
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
     if not allowed:

@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from rovmarket_bot.core.models import Product, ProductPhoto, User, Categories
+from rovmarket_bot.core.models import Product, User
 from rovmarket_bot.app.settings.crud import get_or_create_bot_settings
 
 

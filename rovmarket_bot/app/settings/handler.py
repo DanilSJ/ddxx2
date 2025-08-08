@@ -15,7 +15,7 @@ from .crud import (
     toggle_category_subscription,
 )
 from .keyboard import menu_settings
-from ...core.cache import check_rate_limit
+from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
 
 router = Router()
@@ -134,7 +134,9 @@ async def notifications_page(callback: CallbackQuery, state: FSMContext):
     page = int(callback.data.split(":", 1)[1])
     await send_notifications_categories(callback, state, page)
     await callback.answer()
-    logger.info("Notifications categories page=%s for user_id=%s", page, callback.from_user.id)
+    logger.info(
+        "Notifications categories page=%s for user_id=%s", page, callback.from_user.id
+    )
 
 
 @router.callback_query(F.data.startswith("notif_toggle:"))

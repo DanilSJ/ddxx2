@@ -13,7 +13,7 @@ from rovmarket_bot.core.logger import get_component_logger
 from redis.commands.search.index_definition import IndexDefinition, IndexType
 from redis.commands.search.field import TextField, NumericField
 
-from ...core.models import Product
+from rovmarket_bot.core.models import Product
 
 REDIS_INDEX = "products"  # имя индекса
 
@@ -64,7 +64,9 @@ async def search_in_redis_original(text: str, session: AsyncSession, limit: int 
                 try:
                     product_ids.append(int(redis_id.split(":")[1]))
                 except Exception as e:
-                    logger.warning("Failed to extract id from redis_id=%s: %s", redis_id, e)
+                    logger.warning(
+                        "Failed to extract id from redis_id=%s: %s", redis_id, e
+                    )
                     continue
 
         if not product_ids:

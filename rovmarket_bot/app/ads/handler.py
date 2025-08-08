@@ -4,17 +4,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     Message,
-    InputMediaPhoto,
     CallbackQuery,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
 )
 
 from rovmarket_bot.app.start.keyboard import menu_start
 from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.models import db_helper
-import datetime
-from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from rovmarket_bot.app.ads.crud import (
     get_user_products_paginated,
     get_user_products_count,
@@ -68,7 +64,9 @@ async def button_my_ads(message: Message, state: FSMContext):
             telegram_id=message.from_user.id, session=session
         )
         logger.info(
-            "Loaded %s ads for user_id=%s (first page)", total_count, message.from_user.id
+            "Loaded %s ads for user_id=%s (first page)",
+            total_count,
+            message.from_user.id,
         )
 
     if not products:
@@ -235,7 +233,9 @@ async def unpublish_product(callback: CallbackQuery):
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
-        logger.warning("Unpublish: invalid product id in callback data=%s", callback.data)
+        logger.warning(
+            "Unpublish: invalid product id in callback data=%s", callback.data
+        )
         await callback.answer("Некорректный запрос", show_alert=False)
         return
 
@@ -321,7 +321,9 @@ async def show_product_photos(callback: CallbackQuery):
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
-        logger.warning("Show photos: invalid product id in callback data=%s", callback.data)
+        logger.warning(
+            "Show photos: invalid product id in callback data=%s", callback.data
+        )
         await callback.answer("Некорректный запрос", show_alert=False)
         return
 
