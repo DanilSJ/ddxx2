@@ -7,13 +7,16 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 menu_search = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton(text="Показать все"),
+            KeyboardButton(text="🔍 Показать все"),
         ],
         [
-            KeyboardButton(text="Фильтры"),
+            KeyboardButton(text="🎛 Фильтры"),
         ],
         [
-            KeyboardButton(text="Категории"),
+            KeyboardButton(text="📂 Категории"),
+        ],
+        [
+            KeyboardButton(text="📋Меню"),
         ],
     ],
     resize_keyboard=True,
@@ -102,7 +105,9 @@ def build_filter_pagination_keyboard(
 
     # Always include return to filter options
     buttons_bottom = [
-        InlineKeyboardButton(text="🔙 Фильтры", callback_data=f"filter_show:{category_name}")
+        InlineKeyboardButton(
+            text="🔙 Фильтры", callback_data=f"filter_show:{category_name}"
+        )
     ]
 
     inline_rows = []

@@ -15,6 +15,7 @@ from sqlalchemy.future import select
 
 USERS_PER_PAGE = 50
 COMPLAINTS_PER_PAGE = 3
+ADS_PER_PAGE = 10
 
 
 async def is_admin(telegram_id: int, session: AsyncSession) -> bool:
@@ -182,6 +183,54 @@ async def get_product_with_photos(
         )
     )
     return result.unique().scalar_one_or_none()
+
+
+# Опубликованные объявления: подсчет и пагинация
+async def get_published_products_count(session: AsyncSession) -> int:
+    total = await session.scalar(
+        select(func.count()).select_from(Product).where(Product.publication == True)
+    )
+    return total or 0
+
+
+async def get_published_products_page(
+    session: AsyncSession, page: int, per_page: int = ADS_PER_PAGE
+) -> list[Product]:
+    offset = (page - 1) * per_page
+    result = await session.execute(
+        select(Product)
+        .where(Product.publication == True)
+        .options(selectinload(Product.photos), selectinload(Product.user))
+        .order_by(Product.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+    )
+    return list(result.scalars().all())
+
+
+async def get_published_product_by_id(
+    session: AsyncSession, product_id: int
+) -> Product | None:
+    result = await session.execute(
+        select(Product)
+        .where(Product.id == product_id, Product.publication == True)
+        .options(selectinload(Product.photos), selectinload(Product.user))
+    )
+    return result.unique().scalar_one_or_none()
+
+
+async def search_published_products_by_name(
+    session: AsyncSession, query: str, limit: int = 10
+) -> list[Product]:
+    # Поиск по подстроке в названии, только опубликованные
+    result = await session.execute(
+        select(Product)
+        .where(Product.publication == True, Product.name.ilike(f"%{query}%"))
+        .options(selectinload(Product.photos), selectinload(Product.user))
+        .order_by(Product.created_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
 
 
 # Получить объявление по ID с фото и пользователем

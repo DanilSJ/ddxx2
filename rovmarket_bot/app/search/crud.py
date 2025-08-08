@@ -7,6 +7,7 @@ from rovmarket_bot.core.models import (
     Product,
     Categories,
     User,
+    Complaint,
 )
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -242,3 +243,14 @@ async def add_product_view(product_id: int, user_id: int, session: AsyncSession)
     view = ProductView(product_id=product_id, user_id=user_id)
     session.add(view)
     await session.commit()
+
+
+async def create_complaint(
+    *, user_id: int, text: str, session: AsyncSession
+) -> int:
+    """Создать жалобу от пользователя. Возвращает ID жалобы."""
+    complaint = Complaint(title=text, user_id=user_id)
+    session.add(complaint)
+    await session.commit()
+    await session.refresh(complaint)
+    return complaint.id

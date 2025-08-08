@@ -31,6 +31,7 @@ class Search(StatesGroup):
     category = State()
     price_min = State()
     price_max = State()
+    complaint = State()
 
 
 @router.message(Command("search"))
@@ -63,7 +64,7 @@ async def button_search(message: Message, state: FSMContext):
     )
 
 
-@router.message(F.text == "Показать все")
+@router.message(F.text == "🔍 Показать все")
 async def button_all(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Search.text)
@@ -71,14 +72,14 @@ async def button_all(message: Message, state: FSMContext):
     await show_ads_page(message, state, 0)
 
 
-@router.message(F.text == "Категории")
+@router.message(F.text == "📂 Категории")
 async def button_categories(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Search.category)
     await send_category_page(message, state, 1)
 
 
-@router.message(F.text == "Фильтры")
+@router.message(F.text == "🎛 Фильтры")
 async def button_filters(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Search.category)
@@ -135,7 +136,10 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                         [
                             InlineKeyboardButton(
                                 text="Подробнее", callback_data=f"details:{pid}"
-                            )
+                            ),
+                            InlineKeyboardButton(
+                                text="Пожаловаться", callback_data=f"complaint:{pid}"
+                            ),
                         ]
                     ]
                 )
@@ -156,9 +160,14 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
 
 @router.message(
     Search.text,
-    F.text != "Показать все",
-    F.text != "Фильтры",
-    F.text != "Категории",
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
     F.text != "⚙️ Настройки",
     F.text != "📋 Мои объявления",
     F.text != "📢 Разместить объявление",
@@ -189,7 +198,10 @@ async def search_ads(message: Message, state: FSMContext):
                 [
                     InlineKeyboardButton(
                         text="Подробнее", callback_data=f"details:{product_id}"
-                    )
+                    ),
+                    InlineKeyboardButton(
+                        text="Пожаловаться", callback_data=f"complaint:{product_id}"
+                    ),
                 ]
             ]
         )
@@ -276,7 +288,13 @@ async def show_details(callback: CallbackQuery):
                     text="Просмотреть фотографии",
                     callback_data=f"show_photos:{product_id}",
                 )
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Пожаловаться",
+                    callback_data=f"complaint:{product_id}",
+                )
+            ],
         ]
     )
 
@@ -507,7 +525,10 @@ async def show_products_by_category(
                     [
                         InlineKeyboardButton(
                             text="Подробнее", callback_data=f"details:{pid}"
-                        )
+                        ),
+                        InlineKeyboardButton(
+                            text="Пожаловаться", callback_data=f"complaint:{pid}"
+                        ),
                     ]
                 ]
             )
@@ -623,11 +644,13 @@ async def show_products_by_category_filtered(
                     [
                         InlineKeyboardButton(
                             text="Подробнее", callback_data=f"details:{pid}"
-                        )
+                        ),
+                        InlineKeyboardButton(
+                            text="Пожаловаться", callback_data=f"complaint:{pid}"
+                        ),
                     ]
                 ]
             )
-
             if isinstance(message_or_callback, Message):
                 if photos:
                     await message_or_callback.answer_photo(
@@ -662,6 +685,62 @@ async def show_products_by_category_filtered(
             await message_or_callback.message.answer(
                 info_text, reply_markup=pagination_kb
             )
+
+
+@router.callback_query(F.data.startswith("complaint:"))
+async def start_complaint(callback: CallbackQuery, state: FSMContext):
+    try:
+        product_id = int(callback.data.split(":", 1)[1])
+    except Exception:
+        await callback.answer("Ошибка данных", show_alert=True)
+        return
+    await state.update_data(complaint_product_id=product_id)
+    await state.set_state(Search.complaint)
+    await callback.message.answer(
+        "Опишите вашу жалобу текстом. Введите детали проблемы:"
+    )
+    await callback.answer()
+
+
+@router.message(
+    Search.complaint,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
+async def receive_complaint_text(message: Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer("Пожалуйста, введите текст жалобы.")
+        return
+    data = await state.get_data()
+    product_id = data.get("complaint_product_id")
+    async with db_helper.session_factory() as session:
+        user_id = await get_user_id_by_telegram_id(message.from_user.id, session)
+        if not user_id:
+            await message.answer("Не удалось определить пользователя для жалобы.")
+            await state.clear()
+            return
+        # Сохраняем жалобу. В заголовок добавим ID объявления.
+        full_title = f"Объявление #{product_id}: {text}" if product_id else text
+        try:
+            await create_complaint(user_id=user_id, text=full_title, session=session)
+        except Exception:
+            await message.answer("Ошибка при сохранении жалобы. Попробуйте позже.")
+            await state.clear()
+            return
+    await message.answer("Спасибо! Ваша жалоба отправлена модераторам.")
+    await state.clear()
+    await state.set_state(Search.text)
 
 
 @router.callback_query(F.data.startswith("search_category:"))

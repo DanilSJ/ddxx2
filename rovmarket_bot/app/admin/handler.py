@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -28,6 +29,11 @@ class BroadcastStates(StatesGroup):
     waiting_for_text = State()
 
 
+# Состояния для просмотра опубликованных объявлений (поиск внутри раздела)
+class AdsListStates(StatesGroup):
+    waiting_for_search = State()
+
+
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, state: FSMContext):
     await state.clear()
@@ -47,9 +53,16 @@ async def admin_back(callback: CallbackQuery, state: FSMContext):
     async with db_helper.session_factory() as session:
         is_user_admin = await is_admin(telegram_id, session)
     if is_user_admin:
-        await callback.message.edit_text(
-            "👑 Добро пожаловать в админ-панель!", reply_markup=menu_admin
-        )
+        try:
+            await callback.message.edit_text(
+                "👑 Добро пожаловать в админ-панель!", reply_markup=menu_admin
+            )
+        except TelegramBadRequest:
+            # Сообщение без текста (например, медиа) — отправим новое сообщение
+            await callback.message.answer(
+                "👑 Добро пожаловать в админ-панель!", reply_markup=menu_admin
+            )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "broadcast")
@@ -62,7 +75,21 @@ async def start_broadcast(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.message(BroadcastStates.waiting_for_text)
+@router.message(
+    BroadcastStates.waiting_for_text,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def send_broadcast(message: Message, state: FSMContext):
     text = message.text
     await state.clear()
@@ -263,7 +290,21 @@ async def ads_start(callback: CallbackQuery, state: FSMContext):
 
 
 # Получаем текст рекламы
-@router.message(AdCreationStates.waiting_for_text)
+@router.message(
+    AdCreationStates.waiting_for_text,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def ad_text_received(message: Message, state: FSMContext):
     await state.update_data(ad_text=message.text, photos=[])
     await state.set_state(AdCreationStates.waiting_for_photos)
@@ -274,7 +315,22 @@ async def ad_text_received(message: Message, state: FSMContext):
 
 
 # Приём фото (поддержка альбомов)
-@router.message(AdCreationStates.waiting_for_photos, F.photo)
+@router.message(
+    AdCreationStates.waiting_for_photos,
+    F.photo,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def ad_photos_received(
     message: Message, state: FSMContext, album_messages: list[Message] | None = None
 ):
@@ -301,7 +357,21 @@ async def ad_photos_received(
 
 
 # Команда /done для перехода к предпросмотру
-@router.message(AdCreationStates.waiting_for_photos, F.text == "/done")
+@router.message(
+    AdCreationStates.waiting_for_photos,
+    F.text == "/done",
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def ad_photos_done(message: Message, state: FSMContext):
     data = await state.get_data()
     text = data.get("ad_text")
@@ -328,7 +398,21 @@ async def ad_photos_done(message: Message, state: FSMContext):
 
 
 # Команда /okay — создание рекламы
-@router.message(AdCreationStates.waiting_for_confirmation, F.text == "/okay")
+@router.message(
+    AdCreationStates.waiting_for_confirmation,
+    F.text == "/okay",
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def ad_confirmed(message: Message, state: FSMContext):
     data = await state.get_data()
     text = data.get("ad_text")
@@ -356,14 +440,25 @@ async def ad_confirmed(message: Message, state: FSMContext):
         AdCreationStates.waiting_for_description,
     ),
     F.text == "/cancel",
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
 )
 async def ad_cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Создание рекламы отменено.")
 
 
-@router.callback_query(F.data == "all_ads")
-async def show_all_ads(callback: CallbackQuery):
+@router.callback_query(F.data == "publication")
+async def show_publication(callback: CallbackQuery):
     async with db_helper.session_factory() as session:
         products = await get_unpublished_products(session)
 
@@ -418,8 +513,11 @@ async def show_photos(callback: CallbackQuery):
         await callback.answer("Фотографии не найдены", show_alert=True)
         return
 
-    media = [InputMediaPhoto(media=photo.photo_url) for photo in product.photos]
-    await callback.message.answer_media_group(media)
+    if len(product.photos) == 1:
+        await callback.message.answer_photo(product.photos[0].photo_url)
+    else:
+        media = [InputMediaPhoto(media=photo.photo_url) for photo in product.photos]
+        await callback.message.answer_media_group(media)
     await callback.answer()
 
 
@@ -518,7 +616,21 @@ async def start_add_category(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdCreationStates.waiting_for_name)
 
 
-@router.message(AdCreationStates.waiting_for_name)
+@router.message(
+    AdCreationStates.waiting_for_name,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def category_name_entered(message: Message, state: FSMContext):
     await state.update_data(name=message.text)
     await state.set_state(AdCreationStates.waiting_for_description)
@@ -528,7 +640,21 @@ async def category_name_entered(message: Message, state: FSMContext):
     )
 
 
-@router.message(AdCreationStates.waiting_for_description)
+@router.message(
+    AdCreationStates.waiting_for_description,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def category_description_entered(message: Message, state: FSMContext):
     data = await state.get_data()
     name = data["name"]
@@ -542,3 +668,209 @@ async def category_description_entered(message: Message, state: FSMContext):
         reply_markup=menu_back,
     )
     await state.clear()
+
+
+# ===== Публикованные объявления: список, пагинация, поиск, показ фото, снятие с публикации =====
+
+
+@router.callback_query(F.data.startswith("all_ads"))
+async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
+    # Устанавливаем состояние для перехвата текстовых сообщений как поисковых запросов
+    await state.set_state(AdsListStates.waiting_for_search)
+
+    # Парсим страницу из callback_data: "all_ads?page=1"
+    page = 1
+    parts = callback.data.split("?")
+    if len(parts) == 2 and parts[1].startswith("page="):
+        try:
+            page = int(parts[1].split("=")[1])
+        except ValueError:
+            page = 1
+
+    async with db_helper.session_factory() as session:
+        total_ads = await get_published_products_count(session)
+        products = await get_published_products_page(session, page)
+
+    # Заголовок и навигация
+    header_lines = [
+        f"📢 <b>Опубликованные объявления</b>",
+        f"Всего: <b>{total_ads}</b>",
+        "Введите название или ID объявления в чат для поиска",
+    ]
+    header_text = "\n".join(header_lines)
+
+    # Кнопки навигации
+    total_pages = (total_ads + ADS_PER_PAGE - 1) // ADS_PER_PAGE if total_ads else 1
+    nav_keyboard = []
+    nav_buttons = []
+    if page > 1:
+        nav_buttons.append(
+            InlineKeyboardButton(text="⬅️", callback_data=f"all_ads?page={page - 1}")
+        )
+    if page < total_pages:
+        nav_buttons.append(
+            InlineKeyboardButton(text="➡️", callback_data=f"all_ads?page={page + 1}")
+        )
+    if nav_buttons:
+        nav_keyboard.append(nav_buttons)
+    nav_keyboard.append(
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")]
+    )
+    nav_markup = InlineKeyboardMarkup(inline_keyboard=nav_keyboard)
+
+    # Покажем заголовок с пагинацией, обновив текущее сообщение
+    await callback.message.edit_text(
+        header_text, parse_mode="HTML", reply_markup=nav_markup
+    )
+
+    # Отдельными сообщениями отправим объявления текущей страницы
+    if not products:
+        await callback.message.answer("На этой странице нет объявлений.")
+        await callback.answer()
+        return
+
+    for product in products:
+        first_photo = product.photos[0].photo_url if product.photos else None
+        caption = (
+            f"<b>#{product.id} — {product.name}</b>\n\n"
+            f"{product.description}\n\n"
+            f"<b>Цена:</b> {product.price if product.price is not None else 'Не указана'}\n"
+            f"<b>Контакт:</b> {product.contact}\n"
+            f"<b>Дата:</b> {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+        )
+
+        buttons = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📷 Показать фото",
+                        callback_data=f"show_photos_pub:{product.id}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🛑 Снять с публикации",
+                        callback_data=f"unpublish:{product.id}",
+                    )
+                ],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")],
+            ]
+        )
+
+        if first_photo:
+            await callback.message.answer_photo(
+                first_photo, caption=caption, parse_mode="HTML", reply_markup=buttons
+            )
+        else:
+            await callback.message.answer(
+                caption, parse_mode="HTML", reply_markup=buttons
+            )
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("show_photos_pub:"))
+async def show_photos_published(callback: CallbackQuery):
+    product_id = int(callback.data.split(":")[1])
+    async with db_helper.session_factory() as session:
+        product = await get_published_product_by_id(session, product_id)
+
+    if not product or not product.photos:
+        await callback.answer("Фотографии не найдены", show_alert=True)
+        return
+
+    if len(product.photos) == 1:
+        await callback.message.answer_photo(product.photos[0].photo_url)
+    else:
+        media = [InputMediaPhoto(media=photo.photo_url) for photo in product.photos]
+        await callback.message.answer_media_group(media)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("unpublish:"))
+async def unpublish_ad(callback: CallbackQuery):
+    product_id = int(callback.data.split(":")[1])
+    async with db_helper.session_factory() as session:
+        product = await get_product_with_photos(session, product_id)
+        if not product or product.publication is not True:
+            await callback.answer(
+                "Объявление не найдено или уже снято", show_alert=True
+            )
+            return
+        # Снять с публикации
+        product.publication = False
+        await session.commit()
+
+    await callback.answer("Снято с публикации ✅", show_alert=True)
+
+
+@router.message(
+    AdsListStates.waiting_for_search,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
+async def ads_search_handler(message: Message, state: FSMContext):
+    query = (message.text or "").strip()
+    if not query:
+        return
+
+    async with db_helper.session_factory() as session:
+        products: list[Product] = []
+
+        # Поиск по ID, если число
+        if query.isdigit():
+            product = await get_published_product_by_id(session, int(query))
+            if product:
+                products = [product]
+        # По названию
+        if not products:
+            products = await search_published_products_by_name(session, query, limit=10)
+
+    if not products:
+        await message.answer("Ничего не найдено по вашему запросу.")
+        return
+
+    for product in products:
+        first_photo = product.photos[0].photo_url if product.photos else None
+        caption = (
+            f"<b>#{product.id} — {product.name}</b>\n\n"
+            f"{product.description}\n\n"
+            f"<b>Цена:</b> {product.price if product.price is not None else 'Не указана'}\n"
+            f"<b>Контакт:</b> {product.contact}\n"
+            f"<b>Дата:</b> {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+        )
+
+        buttons = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📷 Показать фото",
+                        callback_data=f"show_photos_pub:{product.id}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🛑 Снять с публикации",
+                        callback_data=f"unpublish:{product.id}",
+                    )
+                ],
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")],
+            ]
+        )
+
+        if first_photo:
+            await message.answer_photo(
+                first_photo, caption=caption, parse_mode="HTML", reply_markup=buttons
+            )
+        else:
+            await message.answer(caption, parse_mode="HTML", reply_markup=buttons)

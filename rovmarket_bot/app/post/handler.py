@@ -125,14 +125,42 @@ async def category_selected(callback: CallbackQuery, state: FSMContext):
     await state.set_state(Post.name)
 
 
-@router.message(Post.categories)
+@router.message(
+    Post.categories,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_categories(message: Message, state: FSMContext):
     await message.answer(
         "❗ Пожалуйста, выберите категорию из предложенных вариантов, используя кнопки ниже 👇"
     )
 
 
-@router.message(Post.name)
+@router.message(
+    Post.name,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_name(message: Message, state: FSMContext):
     if contains_profanity(message.text):
         await message.answer(
@@ -145,7 +173,21 @@ async def process_name(message: Message, state: FSMContext):
     await state.set_state(Post.description)
 
 
-@router.message(Post.description)
+@router.message(
+    Post.description,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_description(message: Message, state: FSMContext):
     if contains_profanity(message.text):
         await message.answer(
@@ -165,7 +207,22 @@ async def process_description(message: Message, state: FSMContext):
     await state.set_state(Post.photo)
 
 
-@router.message(Post.photo, F.photo)
+@router.message(
+    Post.photo,
+    F.photo,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_photo(
     message: Message,
     state: FSMContext,
@@ -200,7 +257,21 @@ async def process_photo(
     )
 
 
-@router.message(Post.photo)
+@router.message(
+    Post.photo,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def photo_other_messages(message: Message):
     await message.answer(
         "📷 Пожалуйста, отправляйте фото *по одному* сообщению.\n\n📌 Если Telegram предлагает *объединить в альбом* — ❗ *уберите галочку*, иначе бот не сможет их обработать.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅:",
@@ -232,7 +303,21 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.message(Post.price)
+@router.message(
+    Post.price,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_price(message: Message, state: FSMContext):
     if not message.text.isdigit():
         await message.answer("🚫 Цена должна быть числом. Попробуйте снова 💡")
@@ -268,7 +353,21 @@ async def price_negotiable_callback(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.message(Post.contact)
+@router.message(
+    Post.contact,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_contact(message: Message, state: FSMContext):
     # ✅ Если номер получен через кнопку — сохраняем без проверки
     if message.contact:
@@ -314,7 +413,22 @@ async def process_contact(message: Message, state: FSMContext):
     await state.set_state(Post.geo)
 
 
-@router.message(Post.geo, F.content_type == ContentType.LOCATION)
+@router.message(
+    Post.geo,
+    F.content_type == ContentType.LOCATION,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_geo_location(message: Message, state: FSMContext):
     location = message.location
     await state.update_data(
@@ -323,14 +437,43 @@ async def process_geo_location(message: Message, state: FSMContext):
     await finalize_post(message, state)
 
 
-@router.message(Post.geo, F.text.lower() == "пропустить геолокацию")
+@router.message(
+    Post.geo,
+    F.text.lower() == "пропустить геолокацию",
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def skip_geo(message: Message, state: FSMContext):
     await state.update_data(geo=None)
     await message.answer("⏭ Геолокация пропущена.")
     await finalize_post(message, state)
 
 
-@router.message(Post.geo)
+@router.message(
+    Post.geo,
+    F.data.startswith("/"),
+    F.text != "🔔Уведомления",
+    F.text != "📋Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_geo_text(message: Message, state: FSMContext):
     # Если пользователь прислал текст вместо локации или кнопки,
     # выводим ошибку и предлагаем воспользоваться кнопкой.
@@ -369,7 +512,9 @@ async def finalize_post(message: Message, state: FSMContext):
             )
             for admin in admins:
                 try:
-                    await message.bot.send_message(chat_id=admin.telegram_id, text=notify_text)
+                    await message.bot.send_message(
+                        chat_id=admin.telegram_id, text=notify_text
+                    )
                 except Exception:
                     # Игнорируем ошибки доставки отдельным администраторам
                     pass

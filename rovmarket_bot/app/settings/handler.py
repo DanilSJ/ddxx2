@@ -21,13 +21,13 @@ router = Router()
 
 
 @router.message(Command("settings"))
-async def cmd_notifications(message: Message, state: FSMContext):
+async def cmd_settings(message: Message, state: FSMContext):
     await state.clear()
-    await button_notifications(message, state)
+    await button_settings(message, state)
 
 
 @router.message(F.text == "⚙️ Настройки")
-async def button_notifications(message: Message, state: FSMContext):
+async def button_settings(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("🛠 Настройки бота", reply_markup=menu_settings)
 
