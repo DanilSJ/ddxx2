@@ -1,6 +1,17 @@
 version: '3.9'
 
 services:
+  bot:
+    build: .
+    container_name: rovmarket-bot
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    command: python rovmarket_bot/main.py
+
   redis:
     image: redis/redis-stack:latest
     container_name: redis

@@ -1,0 +1,22 @@
+# VCS
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv
+.env
+
+# Byte-compiled / optimized / DLL files
+*.pyc
+
+# Project
+logs
+.alembic_env
+
+# Docker
+Dockerfile*
