@@ -1,6 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from rovmarket_bot.core.models import User, Categories, UserCategoryNotification
+from sqlalchemy import update
+from rovmarket_bot.core.models import (
+    User,
+    Categories,
+    UserCategoryNotification,
+    BotSettings,
+)
+from rovmarket_bot.core.logger import apply_logging_configuration
 
 
 async def get_user_with_subscriptions(
@@ -62,3 +69,49 @@ async def toggle_category_subscription(
         session.add(link)
         await session.commit()
         return True
+
+
+# ----- Bot settings (singleton) -----
+
+async def get_or_create_bot_settings(session: AsyncSession) -> BotSettings:
+    result = await session.execute(
+        select(BotSettings).where(BotSettings.singleton_key == 1)
+    )
+    settings_row = result.scalars().first()
+    if settings_row is None:
+        settings_row = BotSettings()  # defaults apply
+        session.add(settings_row)
+        await session.commit()
+        await session.refresh(settings_row)
+    return settings_row
+
+
+async def update_bot_settings(
+    session: AsyncSession,
+    moderation: bool | None = None,
+    logging: bool | None = None,
+) -> BotSettings:
+    settings_row = await get_or_create_bot_settings(session)
+
+    values: dict = {}
+    if moderation is not None:
+        values["moderation"] = moderation
+    if logging is not None:
+        values["logging"] = logging
+
+    if values:
+        await session.execute(
+            update(BotSettings)
+            .where(BotSettings.id == settings_row.id)
+            .values(**values)
+        )
+        await session.commit()
+        await session.refresh(settings_row)
+        # Apply logging changes immediately without restart
+        if "logging" in values:
+            try:
+                apply_logging_configuration(bool(settings_row.logging))
+            except Exception:
+                # Do not break settings update flow if logger reconfig fails
+                pass
+    return settings_row

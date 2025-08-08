@@ -18,6 +18,7 @@ menu_admin = InlineKeyboardMarkup(
                 text="➕ Новая категория", callback_data="add_categories"
             )
         ],
+        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_settings")],
     ]
 )
 
@@ -40,3 +41,23 @@ menu_back = InlineKeyboardMarkup(
         ]
     ]
 )
+
+
+def build_admin_settings_keyboard(*, moderation: bool, logging: bool) -> InlineKeyboardMarkup:
+    mod_status = "✅" if moderation else "❌"
+    log_status = "✅" if logging else "❌"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"🛡 Модерация: {mod_status}", callback_data="toggle_moderation"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"📝 Логирование: {log_status}", callback_data="toggle_logging"
+                )
+            ],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")],
+        ]
+    )

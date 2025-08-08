@@ -6,12 +6,17 @@ from rovmarket_bot.core.models import db_helper
 from .keyboard import menu_start
 from .crud import add_user
 from ...core.cache import check_rate_limit
+from rovmarket_bot.core.logger import get_component_logger
 
 router = Router()
+logger = get_component_logger("start")
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
+    logger.info(
+        "/start from user_id=%s username=%s", message.from_user.id, message.from_user.username
+    )
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
     if not allowed:
         await message.answer(
@@ -25,6 +30,7 @@ async def cmd_start(message: Message, state: FSMContext):
             username=message.from_user.username,
             session=session,
         )
+    logger.info("User ensured in DB user_id=%s", message.from_user.id)
 
     await message.answer(
         """Привет! 👋  
@@ -42,3 +48,4 @@ async def cmd_start(message: Message, state: FSMContext):
 """,
         reply_markup=menu_start,
     )
+    logger.info("Start menu sent to user_id=%s", message.from_user.id)

@@ -16,12 +16,15 @@ from .crud import (
 )
 from .keyboard import menu_settings
 from ...core.cache import check_rate_limit
+from rovmarket_bot.core.logger import get_component_logger
 
 router = Router()
+logger = get_component_logger("settings")
 
 
 @router.message(Command("settings"))
 async def cmd_settings(message: Message, state: FSMContext):
+    logger.info("/settings requested by user_id=%s", message.from_user.id)
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
     if not allowed:
         await message.answer(
@@ -42,6 +45,7 @@ async def button_settings(message: Message, state: FSMContext):
         return
     await state.clear()
     await message.answer("🛠 Настройки бота", reply_markup=menu_settings)
+    logger.info("Settings menu opened by user_id=%s", message.from_user.id)
 
 
 @router.message(F.text == "🔔 Уведомления")
@@ -54,6 +58,7 @@ async def button_notifications(message: Message, state: FSMContext):
         return
     await state.clear()
     await send_notifications_categories(message, state, 1)
+    logger.info("Notifications settings opened by user_id=%s", message.from_user.id)
 
 
 @router.message(F.text == "📋 Меню")
@@ -66,6 +71,7 @@ async def button_menu(message: Message, state: FSMContext):
         return
     await state.clear()
     await cmd_start(message, state)
+    logger.info("Back to main menu by user_id=%s", message.from_user.id)
 
 
 async def send_notifications_categories(
@@ -128,6 +134,7 @@ async def notifications_page(callback: CallbackQuery, state: FSMContext):
     page = int(callback.data.split(":", 1)[1])
     await send_notifications_categories(callback, state, page)
     await callback.answer()
+    logger.info("Notifications categories page=%s for user_id=%s", page, callback.from_user.id)
 
 
 @router.callback_query(F.data.startswith("notif_toggle:"))
@@ -143,3 +150,9 @@ async def notifications_toggle(callback: CallbackQuery, state: FSMContext):
     # Refresh same page to update checkmarks
     await send_notifications_categories(callback, state, page)
     await callback.answer("Включены" if now_sub else "Выключены", show_alert=False)
+    logger.info(
+        "Toggled notification for user_id=%s category_id=%s now_subscribed=%s",
+        callback.from_user.id,
+        category_id,
+        now_sub,
+    )

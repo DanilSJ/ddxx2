@@ -16,7 +16,7 @@ async def check_rate_limit(
     action_key: str,
     *,
     limit: int = 3,
-    window_seconds: int = 10,
+    window_seconds: int = 3,
 ) -> tuple[bool, int]:
     """Rate limiter with fixed cooldown lock.
 

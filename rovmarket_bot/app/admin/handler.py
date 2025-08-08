@@ -15,7 +15,8 @@ from aiogram.types import (
 from rovmarket_bot.core.models import db_helper
 from rovmarket_bot.core.models.user import User
 from .crud import *
-from .keyboard import menu_admin, menu_stats, menu_back
+from .keyboard import menu_admin, menu_stats, menu_back, build_admin_settings_keyboard
+from ..settings.crud import get_or_create_bot_settings, update_bot_settings
 from .states import AdCreationStates
 from rovmarket_bot.core.cache import invalidate_cache_on_new_ad
 from ..search.redis_search import index_product_in_redis
@@ -63,6 +64,42 @@ async def admin_back(callback: CallbackQuery, state: FSMContext):
                 "👑 Добро пожаловать в админ-панель!", reply_markup=menu_admin
             )
     await callback.answer()
+
+
+@router.callback_query(F.data == "admin_settings")
+async def admin_settings(callback: CallbackQuery):
+    async with db_helper.session_factory() as session:
+        settings_row = await get_or_create_bot_settings(session)
+    kb = build_admin_settings_keyboard(
+        moderation=bool(settings_row.moderation),
+        logging=bool(settings_row.logging),
+    )
+    await callback.message.edit_text("⚙️ Настройки бота", reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "toggle_moderation")
+async def toggle_moderation_handler(callback: CallbackQuery):
+    async with db_helper.session_factory() as session:
+        current = (await get_or_create_bot_settings(session)).moderation
+        updated = await update_bot_settings(session, moderation=not bool(current))
+    kb = build_admin_settings_keyboard(
+        moderation=bool(updated.moderation), logging=bool(updated.logging)
+    )
+    await callback.message.edit_text("⚙️ Настройки бота", reply_markup=kb)
+    await callback.answer("Модерация: включена" if updated.moderation else "Модерация: выключена")
+
+
+@router.callback_query(F.data == "toggle_logging")
+async def toggle_logging_handler(callback: CallbackQuery):
+    async with db_helper.session_factory() as session:
+        current = (await get_or_create_bot_settings(session)).logging
+        updated = await update_bot_settings(session, logging=not bool(current))
+    kb = build_admin_settings_keyboard(
+        moderation=bool(updated.moderation), logging=bool(updated.logging)
+    )
+    await callback.message.edit_text("⚙️ Настройки бота", reply_markup=kb)
+    await callback.answer("Логирование: включено" if updated.logging else "Логирование: выключено")
 
 
 @router.callback_query(F.data == "broadcast")

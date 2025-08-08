@@ -3,8 +3,11 @@ from sqlalchemy.future import select
 from redis.asyncio import Redis
 from rovmarket_bot.core.models import Product, ProductPhoto, User, Categories
 from rovmarket_bot.core.cache import invalidate_all_ads_cache
+from rovmarket_bot.app.settings.crud import get_or_create_bot_settings
+from rovmarket_bot.core.logger import get_component_logger
 
 redis = Redis.from_url("redis://localhost:6379", decode_responses=True)
+logger = get_component_logger("post")
 
 
 async def index_product_to_redis(product: Product):
@@ -40,6 +43,11 @@ async def create_product(
     )
     category = result.scalars().first()
     if not category:
+        logger.error(
+            "Category not found while creating product (telegram_id=%s, category=%s)",
+            telegram_id,
+            data.get("category"),
+        )
         raise ValueError("Категория не найдена")
 
     # Подготовка геоданных в формате JSON
@@ -50,6 +58,10 @@ async def create_product(
         if lat is not None and lon is not None:
             geo_data = {"latitude": lat, "longitude": lon}
 
+    # Определяем режим модерации
+    settings_row = await get_or_create_bot_settings(session)
+    publication_value = True if not bool(settings_row.moderation) else None
+
     # Создание продукта
     product = Product(
         name=data["name"],
@@ -59,11 +71,13 @@ async def create_product(
         price=None if data["price"] == "Договорная цена" else int(data["price"]),
         contact=data["contact"],
         geo=geo_data,
+        publication=publication_value,
     )
     session.add(product)
     await session.commit()
     await session.refresh(product)
     await index_product_to_redis(product)
+    logger.info("Product persisted id=%s for user_id=%s", product.id, user.id)
 
     # Добавление фотографий
     for file_id in data.get("photos", []):

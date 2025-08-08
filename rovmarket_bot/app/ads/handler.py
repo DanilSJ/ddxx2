@@ -22,9 +22,13 @@ from rovmarket_bot.app.ads.crud import (
     publish_user_product,
     get_user_product_with_photos,
 )
+from rovmarket_bot.app.settings.crud import get_or_create_bot_settings
+from rovmarket_bot.app.admin.crud import get_admin_users
+from rovmarket_bot.core.logger import get_component_logger
 
 
 router = Router()
+logger = get_component_logger("ads")
 
 
 class UserAdsState(StatesGroup):
@@ -33,6 +37,7 @@ class UserAdsState(StatesGroup):
 
 @router.message(Command("my_ads"))
 async def cmd_my_ads(message: Message, state: FSMContext):
+    logger.info("/my_ads requested by user_id=%s", message.from_user.id)
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
     if not allowed:
         await message.answer(
@@ -61,6 +66,9 @@ async def button_my_ads(message: Message, state: FSMContext):
 
         total_count = await get_user_products_count(
             telegram_id=message.from_user.id, session=session
+        )
+        logger.info(
+            "Loaded %s ads for user_id=%s (first page)", total_count, message.from_user.id
         )
 
     if not products:
@@ -179,6 +187,9 @@ def create_pagination_keyboard(
 async def handle_ads_pagination(callback: CallbackQuery, state: FSMContext):
     """Обработка пагинации объявлений"""
     page = int(callback.data.split("_")[-1])
+    logger.info(
+        "Ads pagination: user_id=%s requested page=%s", callback.from_user.id, page
+    )
 
     async with db_helper.session_factory() as session:
         products = await get_user_products_paginated(
@@ -224,6 +235,7 @@ async def unpublish_product(callback: CallbackQuery):
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
+        logger.warning("Unpublish: invalid product id in callback data=%s", callback.data)
         await callback.answer("Некорректный запрос", show_alert=False)
         return
 
@@ -233,29 +245,74 @@ async def unpublish_product(callback: CallbackQuery):
         )
 
     if updated:
+        logger.info(
+            "Unpublished product_id=%s by user_id=%s", product_id, callback.from_user.id
+        )
         await callback.answer("Объявление снято с публикации")
     else:
+        logger.warning(
+            "Unpublish failed (not owner or already unpublished): product_id=%s user_id=%s",
+            product_id,
+            callback.from_user.id,
+        )
         await callback.answer("Не удалось снять с публикации", show_alert=False)
 
 
 @router.callback_query(F.data.startswith("publish_"))
 async def publish_product(callback: CallbackQuery):
-    """Опубликовать объявление (publication=NULL)."""
+    """Опубликовать объявление с учётом настроек модерации."""
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
+        logger.warning("Publish: invalid product id in callback data=%s", callback.data)
         await callback.answer("Некорректный запрос", show_alert=False)
         return
 
     async with db_helper.session_factory() as session:
-        updated = await publish_user_product(
+        product = await publish_user_product(
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
+        if product is None:
+            logger.warning(
+                "Publish failed: product not found or not owned. product_id=%s user_id=%s",
+                product_id,
+                callback.from_user.id,
+            )
+            await callback.answer("Не удалось опубликовать", show_alert=False)
+            return
 
-    if updated:
-        await callback.answer("Объявление опубликовано")
+        # Отправляем уведомления админам только если модерация включена (publication=None)
+        settings_row = await get_or_create_bot_settings(session)
+        if bool(settings_row.moderation) and product.publication is None:
+            admins = await get_admin_users(session)
+            notify_text = (
+                "🔔 Объявление отправлено на модерацию\n\n"
+                f"ID: {product.id}\n"
+                f"Название: {product.name}\n"
+                f"Цена: {('Договорная' if product.price is None else product.price)}\n\n"
+                "Перейдите в админ-панель для проверки."
+            )
+            for admin in admins:
+                try:
+                    await callback.bot.send_message(
+                        chat_id=admin.telegram_id, text=notify_text
+                    )
+                except Exception:
+                    logger.warning(
+                        "Failed to notify admin telegram_id=%s about moderation",
+                        admin.telegram_id,
+                    )
+
+    # Сообщение пользователю
+    if product.publication is True:
+        logger.info("Product published immediately product_id=%s", product.id)
+        await callback.answer("Объявление опубликовано сразу ✅")
+    elif product.publication is None:
+        logger.info("Product sent to moderation product_id=%s", product.id)
+        await callback.answer("Отправлено на модерацию ⏳")
     else:
-        await callback.answer("Не удалось опубликовать", show_alert=False)
+        logger.info("Product publication status updated product_id=%s", product.id)
+        await callback.answer("Статус объявления обновлён")
 
 
 @router.callback_query(F.data.startswith("show_photos_"))
@@ -264,6 +321,7 @@ async def show_product_photos(callback: CallbackQuery):
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
+        logger.warning("Show photos: invalid product id in callback data=%s", callback.data)
         await callback.answer("Некорректный запрос", show_alert=False)
         return
 
@@ -273,10 +331,20 @@ async def show_product_photos(callback: CallbackQuery):
         )
 
     if product is None:
+        logger.warning(
+            "Show photos: product not found or not owned product_id=%s user_id=%s",
+            product_id,
+            callback.from_user.id,
+        )
         await callback.answer("Объявление не найдено", show_alert=False)
         return
 
     if not product.photos:
+        logger.info(
+            "Show photos: no photos for product_id=%s (user_id=%s)",
+            product_id,
+            callback.from_user.id,
+        )
         await callback.answer("Фотографии отсутствуют", show_alert=False)
         return
 

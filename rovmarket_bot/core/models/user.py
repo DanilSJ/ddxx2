@@ -23,7 +23,7 @@ class User(Base):
         "Complaint", back_populates="user", cascade="all, delete-orphan"
     )
 
-    admin: Mapped[bool] = mapped_column(nullable=True)
+    admin: Mapped[bool] = mapped_column(nullable=True, default=False)
 
     # Many-to-many: categories user subscribed to for notifications
     subscribed_categories = relationship(

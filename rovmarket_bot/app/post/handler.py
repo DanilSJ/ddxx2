@@ -23,8 +23,11 @@ import re
 from rovmarket_bot.core.censorship.bad_words.en import text as bad_words_en
 from rovmarket_bot.core.censorship.bad_words.ru import text as bad_words_ru
 from rovmarket_bot.app.admin.crud import get_admin_users
+from rovmarket_bot.app.settings.crud import get_or_create_bot_settings
+from rovmarket_bot.core.logger import get_component_logger
 
 router = Router()
+logger = get_component_logger("post")
 
 CONTACT_REGEX = r"^(?:\+7\d{10}|\+380\d{9}|\+8\d{10}|@[\w\d_]{5,32}|[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)$"
 
@@ -99,6 +102,7 @@ async def send_category_page(message_or_callback, state: FSMContext, page: int):
 
 @router.message(Command("post"))
 async def cmd_post(message: Message, state: FSMContext):
+    logger.info("/post requested by user_id=%s", message.from_user.id)
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
     if not allowed:
         await message.answer(
@@ -110,6 +114,7 @@ async def cmd_post(message: Message, state: FSMContext):
 
 @router.message(F.text == "📢 Разместить объявление")
 async def button_post(message: Message, state: FSMContext):
+    logger.info("User_id=%s started posting flow", message.from_user.id)
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
     if not allowed:
         await message.answer(
@@ -124,6 +129,7 @@ async def button_post(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("page:"))
 async def paginate_categories(callback: CallbackQuery, state: FSMContext):
     page = int(callback.data.split(":")[1])
+    logger.info("Post categories pagination user_id=%s page=%s", callback.from_user.id, page)
     await send_category_page(callback, state, page=page)
     await callback.answer()
 
@@ -131,6 +137,11 @@ async def paginate_categories(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("select_category:"))
 async def category_selected(callback: CallbackQuery, state: FSMContext):
     category_name = callback.data.split(":")[1]
+    logger.info(
+        "Category selected for post user_id=%s category=%s",
+        callback.from_user.id,
+        category_name,
+    )
     await state.update_data(category=category_name)
     await callback.message.edit_reply_markup(reply_markup=None)  # убираем кнопки
     await callback.message.answer(f"✅ Категория выбрана: *{category_name}*")
@@ -178,6 +189,7 @@ async def process_categories(message: Message, state: FSMContext):
 )
 async def process_name(message: Message, state: FSMContext):
     if contains_profanity(message.text):
+        logger.warning("Profanity detected in name by user_id=%s", message.from_user.id)
         await message.answer(
             "🚫 В названии обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
         )
@@ -205,6 +217,9 @@ async def process_name(message: Message, state: FSMContext):
 )
 async def process_description(message: Message, state: FSMContext):
     if contains_profanity(message.text):
+        logger.warning(
+            "Profanity detected in description by user_id=%s", message.from_user.id
+        )
         await message.answer(
             "🚫 В описании обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
         )
@@ -257,6 +272,9 @@ async def process_photo(
         photos.append(photo_id)
 
     await state.update_data(photos=photos)
+    logger.info(
+        "Photos added for user_id=%s count_now=%s", message.from_user.id, len(photos)
+    )
 
     await message.answer(
         f"✅ Фото добавлено ({len(photos)}/10). Можно отправить ещё или нажмите 'Подтвердить'",
@@ -335,6 +353,9 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
 )
 async def process_price(message: Message, state: FSMContext):
     if not message.text.isdigit():
+        logger.warning(
+            "Invalid price entered by user_id=%s value=%s", message.from_user.id, message.text
+        )
         await message.answer("🚫 Цена должна быть числом. Попробуйте снова 💡")
         return
 
@@ -394,6 +415,9 @@ async def process_contact(message: Message, state: FSMContext):
         cleaned = await clean_phone(raw) if raw.startswith("+") else raw
 
         if not re.match(CONTACT_REGEX, cleaned):
+            logger.warning(
+                "Invalid contact by user_id=%s value=%s", message.from_user.id, raw
+            )
             await message.answer(
                 "❌ *Неверный формат контактных данных.*\n\n"
                 "Пожалуйста, отправьте один из следующих вариантов:\n"
@@ -449,6 +473,12 @@ async def process_geo_location(message: Message, state: FSMContext):
     await state.update_data(
         geo={"latitude": location.latitude, "longitude": location.longitude}
     )
+    logger.info(
+        "Geo set for user_id=%s lat=%s lon=%s",
+        message.from_user.id,
+        location.latitude,
+        location.longitude,
+    )
     await finalize_post(message, state)
 
 
@@ -471,6 +501,7 @@ async def process_geo_location(message: Message, state: FSMContext):
 async def skip_geo(message: Message, state: FSMContext):
     await state.update_data(geo=None)
     await message.answer("⏭ Геолокация пропущена.")
+    logger.info("Geo skipped by user_id=%s", message.from_user.id)
     await finalize_post(message, state)
 
 
@@ -516,24 +547,36 @@ async def finalize_post(message: Message, state: FSMContext):
                 data=data,
                 session=session,
             )
-            # Уведомление администраторов о новом объявлении
-            admins = await get_admin_users(session)
-            notify_text = (
-                "🔔 Новое объявление ожидает проверки\n\n"
-                f"ID: {product.id}\n"
-                f"Название: {product.name}\n"
-                f"Цена: {('Договорная' if product.price is None else product.price)}\n\n"
-                "Перейдите в админ-панель для модерации."
+            logger.info(
+                "Product created id=%s by user_id=%s", product.id, message.from_user.id
             )
-            for admin in admins:
-                try:
-                    await message.bot.send_message(
-                        chat_id=admin.telegram_id, text=notify_text
-                    )
-                except Exception:
-                    # Игнорируем ошибки доставки отдельным администраторам
-                    pass
+            # Проверяем режим модерации — уведомляем админов только если модерация включена
+            settings_row = await get_or_create_bot_settings(session)
+            if bool(settings_row.moderation):
+                admins = await get_admin_users(session)
+                notify_text = (
+                    "🔔 Новое объявление ожидает проверки\n\n"
+                    f"ID: {product.id}\n"
+                    f"Название: {product.name}\n"
+                    f"Цена: {('Договорная' if product.price is None else product.price)}\n\n"
+                    "Перейдите в админ-панель для модерации."
+                )
+                for admin in admins:
+                    try:
+                        await message.bot.send_message(
+                            chat_id=admin.telegram_id, text=notify_text
+                        )
+                    except Exception:
+                        # Игнорируем ошибки доставки отдельным администраторам
+                        logger.warning(
+                            "Failed to notify admin telegram_id=%s about new product id=%s",
+                            admin.telegram_id,
+                            product.id,
+                        )
         except ValueError as e:
+            logger.exception(
+                "Error creating product for user_id=%s: %s", message.from_user.id, e
+            )
             await message.answer(
                 f"❌ Произошла ошибка при создании объявления: {e}",
                 reply_markup=menu_start,
@@ -541,7 +584,7 @@ async def finalize_post(message: Message, state: FSMContext):
             return
 
     await message.answer(
-        "🎉 Ваше объявление успешно создано! В течении 5 минут оно появится",
+        "🎉 ✅ Объявление создано!\n\nОно появится в ленте в течение 5 минут.",
         reply_markup=menu_start,
     )
 

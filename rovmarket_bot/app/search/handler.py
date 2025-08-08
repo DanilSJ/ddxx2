@@ -21,9 +21,11 @@ from rovmarket_bot.core.models import db_helper
 import datetime
 from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
 from rovmarket_bot.core.cache import check_rate_limit
+from rovmarket_bot.core.logger import get_component_logger
 
 
 router = Router()
+logger = get_component_logger("search")
 PAGE_SIZE = 5
 
 
@@ -37,6 +39,7 @@ class Search(StatesGroup):
 
 @router.message(Command("search"))
 async def cmd_search(message: Message, state: FSMContext):
+    logger.info("/search requested by user_id=%s", message.from_user.id)
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
     if not allowed:
         await message.answer(
@@ -48,6 +51,7 @@ async def cmd_search(message: Message, state: FSMContext):
 
 @router.message(Command("filter"))
 async def cmd_filter(message: Message, state: FSMContext):
+    logger.info("/filter requested by user_id=%s", message.from_user.id)
     allowed, retry_after = await check_rate_limit(message.from_user.id, "filter_cmd")
     if not allowed:
         await message.answer(
@@ -59,6 +63,7 @@ async def cmd_filter(message: Message, state: FSMContext):
 
 @router.message(Command("all_ads"))
 async def cmd_all_ads(message: Message, state: FSMContext):
+    logger.info("/all_ads requested by user_id=%s", message.from_user.id)
     allowed, retry_after = await check_rate_limit(message.from_user.id, "all_ads_cmd")
     if not allowed:
         await message.answer(
@@ -70,6 +75,7 @@ async def cmd_all_ads(message: Message, state: FSMContext):
 
 @router.message(Command("categories"))
 async def cmd_categories(message: Message, state: FSMContext):
+    logger.info("/categories requested by user_id=%s", message.from_user.id)
     allowed, retry_after = await check_rate_limit(
         message.from_user.id, "categories_cmd"
     )
@@ -89,6 +95,7 @@ async def button_search(message: Message, state: FSMContext):
     await message.answer(
         "Напишите текст для поиска. Или выберите кнопки", reply_markup=menu_search
     )
+    logger.info("Search flow started for user_id=%s", message.from_user.id)
 
 
 @router.message(F.text == "🔍 Показать все")
@@ -103,6 +110,7 @@ async def button_all(message: Message, state: FSMContext):
     await state.set_state(Search.text)
     await state.update_data(page=0)
     await show_ads_page(message, state, 0)
+    logger.info("Show all ads page=0 for user_id=%s", message.from_user.id)
 
 
 @router.message(F.text == "📂 Категории")
@@ -118,6 +126,7 @@ async def button_categories(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Search.category)
     await send_category_page(message, state, 1)
+    logger.info("Search categories opened for user_id=%s", message.from_user.id)
 
 
 @router.message(F.text == "🎛 Фильтры")
@@ -131,6 +140,7 @@ async def button_filters(message: Message, state: FSMContext):
     await state.clear()
     await state.set_state(Search.category)
     await send_filter_category_page(message, state, 1)
+    logger.info("Search filters opened for user_id=%s", message.from_user.id)
 
 
 @router.message(F.text.in_(["⬅️", "➡️"]))
@@ -149,6 +159,7 @@ async def paginate_ads(message: Message, state: FSMContext):
         page -= 1
     await state.update_data(page=page)
     await show_ads_page(message, state, page)
+    logger.info("Ads pagination user_id=%s page=%s", message.from_user.id, page)
 
 
 async def show_ads_page(message: Message, state: FSMContext, page: int):
@@ -169,6 +180,7 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                 await message.answer(
                     "Нет объявлений на этой странице.", reply_markup=pagination_keyboard
                 )
+                logger.info("No ads on page=%s for user_id=%s", page, message.from_user.id)
                 return
 
             for pid in page_ids:
@@ -209,6 +221,7 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
             )
         else:
             await show_ads_page(message, state, 0)
+            logger.info("Cache miss, fallback to page=0 for user_id=%s", message.from_user.id)
 
 
 @router.message(
@@ -228,9 +241,11 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
 )
 async def search_ads(message: Message, state: FSMContext):
     query = message.text
+    logger.info("Search query by user_id=%s: %s", message.from_user.id, query)
     async with db_helper.session_factory() as session:
         results = await search_in_redis(query, session)
     if not results:
+        logger.info("No search results for user_id=%s", message.from_user.id)
         await message.answer("Ничего не найдено 😔")
         return
     for item in results:
@@ -272,6 +287,7 @@ async def show_details(callback: CallbackQuery):
         parts = callback.data.split(":")
         product_id = int(parts[-1])
     except (ValueError, IndexError):
+        logger.warning("Details: invalid callback data=%s", callback.data)
         await callback.answer("Ошибка: неверный формат данных.", show_alert=True)
         return
 
@@ -279,12 +295,18 @@ async def show_details(callback: CallbackQuery):
         product = await get_product_by_id(product_id, session)
 
         if not product:
+            logger.info("Details: product not found product_id=%s", product_id)
             await callback.answer("Данные не найдены", show_alert=True)
             return
 
         user_id = await get_user_id_by_telegram_id(callback.from_user.id, session)
         if user_id:
             await add_product_view(product_id, user_id, session)
+            logger.info(
+                "Recorded product view product_id=%s by user_id=%s",
+                product_id,
+                user_id,
+            )
 
     name = product.get("name", "Без названия")
     desc = product.get("description", "Без описания")
@@ -362,6 +384,10 @@ async def show_details(callback: CallbackQuery):
                 full_text, reply_markup=photos_button, parse_mode="HTML"
             )
     except Exception:
+        logger.warning(
+            "Failed to edit message for details product_id=%s, sending new message",
+            product_id,
+        )
         if photos:
             await callback.message.answer_photo(
                 photos[0],
@@ -382,6 +408,7 @@ async def show_photos(callback: CallbackQuery):
         product = await get_product_by_id(product_id, session)
 
     if not product:
+        logger.info("Show photos: product not found product_id=%s", product_id)
         await callback.answer("Данные не найдены", show_alert=True)
         return
 
@@ -428,6 +455,7 @@ async def show_photos(callback: CallbackQuery):
     photos = product.get("photos", [])[:10]  # максимум 10 фото
 
     if not photos:
+        logger.info("Show photos: no photos product_id=%s", product_id)
         await callback.answer("Фотографий нет", show_alert=True)
         return
     if len(photos) == 1:
@@ -803,6 +831,11 @@ async def handle_category_selection(callback: CallbackQuery, state: FSMContext):
     await state.update_data(selected_category=category_name)
     await show_products_by_category(callback, state, category_name, 1)
     await callback.answer()
+    logger.info(
+        "Search: category selected by user_id=%s category=%s",
+        callback.from_user.id,
+        category_name,
+    )
 
 
 @router.callback_query(F.data.startswith("filter_category:"))
@@ -817,6 +850,11 @@ async def handle_filter_category_selection(callback: CallbackQuery, state: FSMCo
         f"Категория: {category_name}\nВыберите опции фильтрации:", reply_markup=keyboard
     )
     await callback.answer()
+    logger.info(
+        "Search: filter category selected by user_id=%s category=%s",
+        callback.from_user.id,
+        category_name,
+    )
 
 
 @router.callback_query(F.data.startswith("filter_category_page:"))
@@ -954,6 +992,15 @@ async def handle_filter_products_pagination(callback: CallbackQuery, state: FSMC
         price_max=price_max,
     )
     await callback.answer()
+    logger.info(
+        "Search: filter pagination user_id=%s category=%s page=%s sort=%s min=%s max=%s",
+        callback.from_user.id,
+        category_name,
+        page,
+        sort,
+        price_min,
+        price_max,
+    )
 
 
 @router.callback_query(F.data == "filter_back_to_categories")

@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from rovmarket_bot.core.models import Product, ProductPhoto, User, Categories
+from rovmarket_bot.app.settings.crud import get_or_create_bot_settings
 
 
 async def get_user_products(telegram_id: int, session: AsyncSession):
@@ -91,10 +92,12 @@ async def unpublish_user_product(
 
 async def publish_user_product(
     product_id: int, telegram_id: int, session: AsyncSession
-) -> bool:
-    """Опубликовать объявление: установить publication=NULL только для владельца.
+) -> Product | None:
+    """Опубликовать объявление для владельца.
 
-    Возвращает True, если статус был обновлён, иначе False (не найдено или уже опубликовано).
+    Если moderation=False → publication=True (без модерации).
+    Если moderation=True → publication=NULL (на модерацию).
+    Возвращает обновлённый продукт или None (если не найден/не принадлежит).
     """
     stmt = (
         select(Product)
@@ -108,14 +111,27 @@ async def publish_user_product(
     product: Product | None = result.unique().scalar_one_or_none()
 
     if product is None:
-        return False
+        return None
 
-    if product.publication is None:
-        return False
+    # Если уже находится в состоянии ожидания (None) и модерация включена,
+    # то нет смысла менять
+    settings_row = await get_or_create_bot_settings(session)
+    moderation_on = bool(settings_row.moderation)
 
-    product.publication = None
+    if moderation_on:
+        # переводим на модерацию (NULL), если ещё не NULL
+        if product.publication is None:
+            return product
+        product.publication = None
+    else:
+        # публикуем сразу
+        if product.publication is True:
+            return product
+        product.publication = True
+
     await session.commit()
-    return True
+    await session.refresh(product)
+    return product
 
 
 async def get_user_product_with_photos(

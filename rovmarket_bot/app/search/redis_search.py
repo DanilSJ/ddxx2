@@ -9,6 +9,7 @@ from .crud import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from rovmarket_bot.core.config import settings
+from rovmarket_bot.core.logger import get_component_logger
 from redis.commands.search.index_definition import IndexDefinition, IndexType
 from redis.commands.search.field import TextField, NumericField
 
@@ -17,6 +18,7 @@ from ...core.models import Product
 REDIS_INDEX = "products"  # имя индекса
 
 redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+logger = get_component_logger("search")
 
 
 async def search_in_redis(text: str, session: AsyncSession, limit: int = 10):
@@ -29,27 +31,28 @@ from re import findall
 
 async def search_in_redis_original(text: str, session: AsyncSession, limit: int = 10):
     try:
-        print(f"\n🔍 Поисковый текст: {text}")
+        logger.info("RedisSearch query: %s", text)
 
         # Ищем все числа в тексте для поиска по цене
         numbers = findall(r"\d+", text)
-        print(f"🔢 Найденные числа в тексте: {numbers}")
+        if numbers:
+            logger.info("Numbers extracted from query: %s", numbers)
 
         # Формируем часть запроса для price, если есть числа
         price_query = ""
         if numbers:
             price_ranges = " | ".join([f"@price:[{num} {num}]" for num in numbers])
             price_query = f" | {price_ranges}"
-        print(f"💰 Price query: {price_query}")
+        if price_query:
+            logger.info("Price subquery: %s", price_query)
 
         # Основной запрос по name и description + price
         query_str = f"@name:{text} | @description:{text}{price_query}"
-        print(f"🔧 Итоговый RedisSearch запрос: {query_str}")
+        logger.info("RedisSearch final query: %s", query_str)
 
         query = Query(query_str).paging(0, limit)
         result = await redis.ft(REDIS_INDEX).search(query)
-
-        print(f"📄 Найдено документов в Redis: {len(result.docs)}")
+        logger.info("RedisSearch found docs: %s", len(result.docs))
 
         docs = [doc.__dict__ for doc in result.docs]
 
@@ -61,21 +64,20 @@ async def search_in_redis_original(text: str, session: AsyncSession, limit: int 
                 try:
                     product_ids.append(int(redis_id.split(":")[1]))
                 except Exception as e:
-                    print(f"⚠️ Ошибка извлечения ID из {redis_id}: {e}")
+                    logger.warning("Failed to extract id from redis_id=%s: %s", redis_id, e)
                     continue
 
-        print(f"🆔 Полученные product_ids из Redis: {product_ids}")
         if not product_ids:
-            print("🚫 Нет product_ids — ничего не возвращаем.")
+            logger.info("No product_ids from Redis. Attempting to restore index data.")
             await restore_redis_data(session)
             return []
 
         publication_map = await get_publication_for_products(product_ids, session)
         filtered_product_ids = [pid for pid in product_ids if publication_map.get(pid)]
-        print(f"✅ Отфильтрованные опубликованные product_ids: {filtered_product_ids}")
+        logger.info("Published product_ids after filter: %s", filtered_product_ids)
 
         if not filtered_product_ids:
-            print("🚫 Нет опубликованных объявлений.")
+            logger.info("No published products matched the search.")
             return []
 
         photos_map = await get_photos_for_products(filtered_product_ids, session)
@@ -102,11 +104,11 @@ async def search_in_redis_original(text: str, session: AsyncSession, limit: int 
 
             filtered_docs.append(doc)
 
-        print(f"📦 Возвращаем {len(filtered_docs)} документов.")
+        logger.info("Returning %s filtered documents", len(filtered_docs))
         return filtered_docs
 
     except Exception as e:
-        print("❌ RedisSearch error:", e)
+        logger.exception("RedisSearch error: %s", e)
         return []
 
 
@@ -157,3 +159,4 @@ async def ensure_redis_index():
             ],
             definition=IndexDefinition(prefix=["product:"], index_type=IndexType.HASH),
         )
+        logger.info("Created RedisSearch index 'products'")

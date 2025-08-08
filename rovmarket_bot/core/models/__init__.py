@@ -9,6 +9,7 @@ __all__ = [
     "UserCategoryNotification",
     "Advertisement",
     "AdPhoto",
+    "BotSettings",
     "db_helper",
     "DatabaseHelper",
 ]
@@ -24,3 +25,4 @@ from .product_view import ProductView
 from .complaint import Complaint
 from .advertisement import Advertisement
 from .advertisement import AdPhoto
+from .settings import BotSettings
