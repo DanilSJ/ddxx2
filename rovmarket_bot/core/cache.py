@@ -11,6 +11,46 @@ redis_cache = Redis.from_url(settings.REDIS_URL, decode_responses=True)
 CACHE_TIMEOUT = 600
 
 
+async def check_rate_limit(
+    user_telegram_id: int,
+    action_key: str,
+    *,
+    limit: int = 3,
+    window_seconds: int = 10,
+) -> tuple[bool, int]:
+    """Rate limiter with fixed cooldown lock.
+
+    - Allows up to `limit` hits within `window_seconds`.
+    - When limit exceeded, sets a lock for exactly `window_seconds`.
+      During lock, all requests are denied and a remaining TTL is returned.
+
+    Returns (allowed, retry_after_seconds).
+    """
+    counter_key = f"rl:{user_telegram_id}:{action_key}:cnt"
+    lock_key = f"rl:{user_telegram_id}:{action_key}:lock"
+    try:
+        # If locked – deny with remaining TTL (fixed cooldown)
+        ttl = await redis_cache.ttl(lock_key)
+        if ttl is not None and ttl > 0:
+            return False, int(ttl)
+
+        # Count within window
+        current = await redis_cache.incr(counter_key)
+        if current == 1:
+            await redis_cache.expire(counter_key, window_seconds)
+
+        if current > limit:
+            # Set fixed cooldown and reset counter
+            await redis_cache.set(lock_key, "1", ex=window_seconds)
+            await redis_cache.delete(counter_key)
+            return False, window_seconds
+
+        return True, 0
+    except Exception:
+        # On Redis issues, fail-open
+        return True, 0
+
+
 async def get_categories_page_cached(
     session: AsyncSession, page: int = 1, limit: int = 10
 ):

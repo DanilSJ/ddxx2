@@ -7,7 +7,6 @@ from .base import Base
 class Advertisement(Base):
     __tablename__ = "advertisement"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     text: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -3,7 +3,10 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from .crud import create_product
-from rovmarket_bot.core.cache import get_categories_page_cached as get_categories_page
+from rovmarket_bot.core.cache import (
+    get_categories_page_cached as get_categories_page,
+    check_rate_limit,
+)
 from rovmarket_bot.core.models import db_helper
 from aiogram.types import (
     Message,
@@ -96,11 +99,23 @@ async def send_category_page(message_or_callback, state: FSMContext, page: int):
 
 @router.message(Command("post"))
 async def cmd_post(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await button_post(message=message, state=state)
 
 
 @router.message(F.text == "📢 Разместить объявление")
 async def button_post(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await state.set_state(Post.categories)
     await send_category_page(message, state, page=1)
@@ -128,8 +143,8 @@ async def category_selected(callback: CallbackQuery, state: FSMContext):
 @router.message(
     Post.categories,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -149,8 +164,8 @@ async def process_categories(message: Message, state: FSMContext):
 @router.message(
     Post.name,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -176,8 +191,8 @@ async def process_name(message: Message, state: FSMContext):
 @router.message(
     Post.description,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -211,8 +226,8 @@ async def process_description(message: Message, state: FSMContext):
     Post.photo,
     F.photo,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -260,8 +275,8 @@ async def process_photo(
 @router.message(
     Post.photo,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -274,7 +289,7 @@ async def process_photo(
 )
 async def photo_other_messages(message: Message):
     await message.answer(
-        "📷 Пожалуйста, отправляйте фото *по одному* сообщению.\n\n📌 Если Telegram предлагает *объединить в альбом* — ❗ *уберите галочку*, иначе бот не сможет их обработать.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅:",
+        "📷 Пожалуйста, отправляйте фото *по одному* сообщению.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅:",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -306,8 +321,8 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
 @router.message(
     Post.price,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -356,8 +371,8 @@ async def price_negotiable_callback(callback: CallbackQuery, state: FSMContext):
 @router.message(
     Post.contact,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -417,8 +432,8 @@ async def process_contact(message: Message, state: FSMContext):
     Post.geo,
     F.content_type == ContentType.LOCATION,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -441,8 +456,8 @@ async def process_geo_location(message: Message, state: FSMContext):
     Post.geo,
     F.text.lower() == "пропустить геолокацию",
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -462,8 +477,8 @@ async def skip_geo(message: Message, state: FSMContext):
 @router.message(
     Post.geo,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",

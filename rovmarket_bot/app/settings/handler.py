@@ -15,31 +15,55 @@ from .crud import (
     toggle_category_subscription,
 )
 from .keyboard import menu_settings
-
+from ...core.cache import check_rate_limit
 
 router = Router()
 
 
 @router.message(Command("settings"))
 async def cmd_settings(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await button_settings(message, state)
 
 
 @router.message(F.text == "⚙️ Настройки")
 async def button_settings(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await message.answer("🛠 Настройки бота", reply_markup=menu_settings)
 
 
-@router.message(F.text == "🔔Уведомления")
+@router.message(F.text == "🔔 Уведомления")
 async def button_notifications(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await send_notifications_categories(message, state, 1)
 
 
-@router.message(F.text == "📋Меню")
+@router.message(F.text == "📋 Меню")
 async def button_menu(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await cmd_start(message, state)
 

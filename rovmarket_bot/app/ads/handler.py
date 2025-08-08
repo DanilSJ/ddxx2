@@ -11,6 +11,7 @@ from aiogram.types import (
 )
 
 from rovmarket_bot.app.start.keyboard import menu_start
+from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.models import db_helper
 import datetime
 from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
@@ -32,12 +33,24 @@ class UserAdsState(StatesGroup):
 
 @router.message(Command("my_ads"))
 async def cmd_my_ads(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
-    await button_search(message, state)
+    await button_my_ads(message, state)
 
 
 @router.message(F.text == "📋 Мои объявления")
-async def button_search(message: Message, state: FSMContext):
+async def button_my_ads(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
 
     async with db_helper.session_factory() as session:
@@ -88,18 +101,24 @@ async def send_user_products(
         # Отправляем единое сообщение с кнопками действий
         actions_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="Снять с публикации",
-                    callback_data=f"unpublish_{product.id}"
-                )],
-                [InlineKeyboardButton(
-                    text="Опубликовать объявление",
-                    callback_data=f"publish_{product.id}"
-                )],
-                [InlineKeyboardButton(
-                    text="Показать фотографию",
-                    callback_data=f"show_photos_{product.id}"
-                )],
+                [
+                    InlineKeyboardButton(
+                        text="Снять с публикации",
+                        callback_data=f"unpublish_{product.id}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Опубликовать объявление",
+                        callback_data=f"publish_{product.id}",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Показать фотографию",
+                        callback_data=f"show_photos_{product.id}",
+                    )
+                ],
             ]
         )
         if product.photos:
@@ -262,5 +281,7 @@ async def show_product_photos(callback: CallbackQuery):
         return
 
     first_photo = product.photos[0]
-    await callback.message.answer_photo(photo=first_photo.photo_url, caption=product.name)
+    await callback.message.answer_photo(
+        photo=first_photo.photo_url, caption=product.name
+    )
     await callback.answer()

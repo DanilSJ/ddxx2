@@ -16,7 +16,7 @@ menu_search = ReplyKeyboardMarkup(
             KeyboardButton(text="📂 Категории"),
         ],
         [
-            KeyboardButton(text="📋Меню"),
+            KeyboardButton(text="📋 Меню"),
         ],
     ],
     resize_keyboard=True,
@@ -27,16 +27,7 @@ pagination_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="⬅️"), KeyboardButton(text="➡️")],
         [
-            KeyboardButton(text="🔍 Найти объявление"),
-        ],
-        [
-            KeyboardButton(text="📢 Разместить объявление"),
-        ],
-        [
-            KeyboardButton(text="📋 Мои объявления"),
-        ],
-        [
-            KeyboardButton(text="⚙️ Настройки"),
+            KeyboardButton(text="📋 Меню"),
         ],
     ],
     resize_keyboard=True,

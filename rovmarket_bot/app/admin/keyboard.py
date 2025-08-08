@@ -8,7 +8,7 @@ menu_admin = InlineKeyboardMarkup(
             )
         ],
         [InlineKeyboardButton(text="📢 Публикация", callback_data="publication")],
-        [InlineKeyboardButton(text="📢 Объявления", callback_data="all_ads?page=1")],
+        [InlineKeyboardButton(text="📋 Объявления", callback_data="all_ads?page=1")],
         [InlineKeyboardButton(text="💼 Реклама", callback_data="ads")],
         [InlineKeyboardButton(text="🚨 Жалобы", callback_data="complaints")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],

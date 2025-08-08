@@ -20,6 +20,7 @@ from .redis_search import search_in_redis
 from rovmarket_bot.core.models import db_helper
 import datetime
 from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
+from rovmarket_bot.core.cache import check_rate_limit
 
 
 router = Router()
@@ -36,21 +37,47 @@ class Search(StatesGroup):
 
 @router.message(Command("search"))
 async def cmd_search(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await button_search(message, state)
 
 
 @router.message(Command("filter"))
 async def cmd_filter(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "filter_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await send_filter_category_page(message, state, 1)
 
 
 @router.message(Command("all_ads"))
 async def cmd_all_ads(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "all_ads_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await button_all(message, state)
 
 
 @router.message(Command("categories"))
 async def cmd_categories(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(
+        message.from_user.id, "categories_cmd"
+    )
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await button_categories(message, state)
 
 
@@ -66,6 +93,12 @@ async def button_search(message: Message, state: FSMContext):
 
 @router.message(F.text == "🔍 Показать все")
 async def button_all(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "show_all")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await state.set_state(Search.text)
     await state.update_data(page=0)
@@ -74,6 +107,14 @@ async def button_all(message: Message, state: FSMContext):
 
 @router.message(F.text == "📂 Категории")
 async def button_categories(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(
+        message.from_user.id, "categories_btn"
+    )
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await state.set_state(Search.category)
     await send_category_page(message, state, 1)
@@ -81,6 +122,12 @@ async def button_categories(message: Message, state: FSMContext):
 
 @router.message(F.text == "🎛 Фильтры")
 async def button_filters(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "filters_btn")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     await state.clear()
     await state.set_state(Search.category)
     await send_filter_category_page(message, state, 1)
@@ -88,6 +135,12 @@ async def button_filters(message: Message, state: FSMContext):
 
 @router.message(F.text.in_(["⬅️", "➡️"]))
 async def paginate_ads(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
     data = await state.get_data()
     page = data.get("page", 0)
     if message.text == "➡️":
@@ -161,8 +214,8 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
 @router.message(
     Search.text,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
@@ -705,8 +758,8 @@ async def start_complaint(callback: CallbackQuery, state: FSMContext):
 @router.message(
     Search.complaint,
     ~F.text.startswith("/"),
-    F.text != "🔔Уведомления",
-    F.text != "📋Меню",
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
     F.text != "📱 Отправить номер телефона",
     F.text != "🔙 Назад",
     F.text != "🔍 Показать все",
