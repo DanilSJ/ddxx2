@@ -160,7 +160,7 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
 
 @router.message(
     Search.text,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -704,7 +704,7 @@ async def start_complaint(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     Search.complaint,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",

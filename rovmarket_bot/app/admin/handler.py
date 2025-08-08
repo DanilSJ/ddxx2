@@ -77,7 +77,7 @@ async def start_broadcast(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     BroadcastStates.waiting_for_text,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -292,7 +292,7 @@ async def ads_start(callback: CallbackQuery, state: FSMContext):
 # Получаем текст рекламы
 @router.message(
     AdCreationStates.waiting_for_text,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -318,7 +318,7 @@ async def ad_text_received(message: Message, state: FSMContext):
 @router.message(
     AdCreationStates.waiting_for_photos,
     F.photo,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -618,7 +618,7 @@ async def start_add_category(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     AdCreationStates.waiting_for_name,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -642,7 +642,7 @@ async def category_name_entered(message: Message, state: FSMContext):
 
 @router.message(
     AdCreationStates.waiting_for_description,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -806,7 +806,7 @@ async def unpublish_ad(callback: CallbackQuery):
 
 @router.message(
     AdsListStates.waiting_for_search,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",

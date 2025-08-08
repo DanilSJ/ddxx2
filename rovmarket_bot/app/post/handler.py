@@ -127,7 +127,7 @@ async def category_selected(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     Post.categories,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -148,7 +148,7 @@ async def process_categories(message: Message, state: FSMContext):
 
 @router.message(
     Post.name,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -175,7 +175,7 @@ async def process_name(message: Message, state: FSMContext):
 
 @router.message(
     Post.description,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -210,7 +210,7 @@ async def process_description(message: Message, state: FSMContext):
 @router.message(
     Post.photo,
     F.photo,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -259,7 +259,7 @@ async def process_photo(
 
 @router.message(
     Post.photo,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -305,7 +305,7 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     Post.price,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -355,7 +355,7 @@ async def price_negotiable_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     Post.contact,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -416,7 +416,7 @@ async def process_contact(message: Message, state: FSMContext):
 @router.message(
     Post.geo,
     F.content_type == ContentType.LOCATION,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -440,7 +440,7 @@ async def process_geo_location(message: Message, state: FSMContext):
 @router.message(
     Post.geo,
     F.text.lower() == "пропустить геолокацию",
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
@@ -461,7 +461,7 @@ async def skip_geo(message: Message, state: FSMContext):
 
 @router.message(
     Post.geo,
-    F.data.startswith("/"),
+    ~F.text.startswith("/"),
     F.text != "🔔Уведомления",
     F.text != "📋Меню",
     F.text != "📱 Отправить номер телефона",
