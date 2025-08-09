@@ -28,8 +28,8 @@ services:
     container_name: postgres
     environment:
       POSTGRES_USER: danil
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: danil_db
+      POSTGRES_PASSWORD: LrKLGTmTcalUeRsIhdcsLPzYSZyZmtcfhdrFvIWallndMbMbFZ
+      POSTGRES_DB: rovmarket_bot
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
