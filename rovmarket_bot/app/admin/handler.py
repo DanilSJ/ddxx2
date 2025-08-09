@@ -522,7 +522,7 @@ async def show_publication(callback: CallbackQuery):
                 [
                     InlineKeyboardButton(
                         text="📷 Показать фото",
-                        callback_data=f"show_photos:{product.id}",
+                        callback_data=f"show_photos_admin:{product.id}",
                     )
                 ],
                 [
@@ -549,8 +549,9 @@ async def show_publication(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("show_photos:"))
+@router.callback_query(F.data.startswith("show_photos_admin:"))
 async def show_photos(callback: CallbackQuery):
+    print(f"show_photos:{callback.data}")
     product_id = int(callback.data.split(":")[1])
     async with db_helper.session_factory() as session:
         product = await get_product_with_photos_and_user(session, product_id)
@@ -559,11 +560,13 @@ async def show_photos(callback: CallbackQuery):
         await callback.answer("Фотографии не найдены", show_alert=True)
         return
 
-    if len(product.photos) == 1:
-        await callback.message.answer_photo(product.photos[0].photo_url)
-    else:
-        media = [InputMediaPhoto(media=photo.photo_url) for photo in product.photos]
+    media = [InputMediaPhoto(media=photo.photo_url) for photo in product.photos]
+    try:
         await callback.message.answer_media_group(media)
+    except Exception as e:
+        await callback.answer(f"Ошибка при показе фото: {e}", show_alert=True)
+        return
+
     await callback.answer()
 
 
