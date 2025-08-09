@@ -7,7 +7,11 @@ from aiogram.types import (
 
 menu_price_negotiable_edit = InlineKeyboardMarkup(
     inline_keyboard=[
-        [InlineKeyboardButton(text="Договорная", callback_data="price_negotiable_edit")]
+        [
+            InlineKeyboardButton(
+                text="Договорная", callback_data="price_negotiable_edit"
+            ),
+        ]
     ]
 )
 
@@ -19,4 +23,12 @@ contact = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True,
     one_time_keyboard=True,
+)
+
+menu_skip = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="Пропустить"),
+        ]
+    ],
 )

@@ -11,7 +11,11 @@ from html import escape
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from rovmarket_bot.app.ads.keyboard import contact, menu_price_negotiable_edit
+from rovmarket_bot.app.ads.keyboard import (
+    contact,
+    menu_price_negotiable_edit,
+    menu_skip,
+)
 from rovmarket_bot.app.start.keyboard import menu_start
 from rovmarket_bot.core.cache import check_rate_limit, invalidate_all_ads_cache
 from rovmarket_bot.core.models import db_helper
@@ -513,63 +517,83 @@ async def start_edit_product(callback: CallbackQuery, state: FSMContext):
             return
 
     await state.update_data(edit_product_id=product_id)
-    await callback.message.answer("✏️ Введите **новое название** для вашего объявления:")
+    await callback.message.answer(
+        "✏️ Введите **новое название** для вашего объявления:",
+        reply_markup=menu_skip,
+    )
     await state.set_state(EditProductState.waiting_name)
     await callback.answer()
 
 
 @router.message(EditProductState.waiting_name)
 async def edit_name(message: Message, state: FSMContext):
-    await state.update_data(new_name=message.text)
-    await message.answer("✏️ Введите **новое описание** для вашего объявления:")
+    if message.text == "Пропустить":
+        # Не обновляем имя, пропускаем
+        await state.update_data(new_name=None)
+    else:
+        await state.update_data(new_name=message.text)
+    await message.answer(
+        "✏️ Введите **новое описание** для вашего объявления:",
+        reply_markup=menu_skip,
+    )
     await state.set_state(EditProductState.waiting_description)
 
 
 @router.message(EditProductState.waiting_description)
 async def edit_description(message: Message, state: FSMContext):
-    await state.update_data(new_description=message.text)
+    if message.text == "Пропустить":
+        await state.update_data(new_description=None)
+    else:
+        await state.update_data(new_description=message.text)
 
     await message.answer(
         "💰 Введите **новую цену** (только цифры) или нажмите кнопку «Договорная» ниже:",
         reply_markup=menu_price_negotiable_edit,
+    )
+    await message.answer(
+        "Можете пропустить цену",
+        reply_markup=menu_skip,
     )
     await state.set_state(EditProductState.waiting_price)
 
 
 @router.message(EditProductState.waiting_price)
 async def edit_price(message: Message, state: FSMContext):
-    price_text = message.text.strip().lower()
-
-    if price_text == "договорная":
-        price = None
+    if message.text == "Пропустить":
+        await state.update_data(new_price=None)
     else:
-        # Убираем пробелы, точки, тире и подчёркивания
-        clean_text = re.sub(r"[ \.\-_]", "", price_text)
+        price_text = message.text.strip().lower()
+        if price_text == "договорная":
+            price = None
+        else:
+            clean_text = re.sub(r"[ \.\-_]", "", price_text)
+            match = re.match(r"(\d+)(к*)$", clean_text)
+            if not match:
+                await message.answer(
+                    "❌ Некорректный формат цены.\n\n"
+                    "Введите только цифры или используйте формат типа:\n"
+                    "• `100к` (100 000)\n"
+                    "• `250кк` (250 000 000)\n"
+                    "или нажмите кнопку «💬 Договорная» или «Пропустить»."
+                )
+                return
+            number_part = int(match.group(1))
+            k_multiplier = 1000 ** len(match.group(2))
+            price = number_part * k_multiplier
+        await state.update_data(new_price=price)
 
-        # Формат с "к", "кк" и т.д.
-        match = re.match(r"(\d+)(к*)$", clean_text)
-        if not match:
-            await message.answer(
-                "❌ Некорректный формат цены.\n\n"
-                "Введите только цифры или используйте формат типа:\n"
-                "• `100к` (100 000)\n"
-                "• `250кк` (250 000 000)\n"
-                "или нажмите кнопку «💬 Договорная»."
-            )
-            return
-
-        number_part = int(match.group(1))
-        k_multiplier = 1000 ** len(match.group(2))
-        price = number_part * k_multiplier
-
-    await state.update_data(new_price=price)
     await message.answer(
         "📞 Укажите ваши контактные данные:\n\n"
         "— Номер телефона (начиная с `+7`, `+380` или `+8`)\n"
         "— Email (например, `example@mail.com`)\n"
         "— Telegram username (начиная с `@`)\n\n"
-        "Чтобы быстро поделиться номером телефона, нажмите кнопку «📱 Отправить номер телефона» ниже 👇",
+        "Чтобы быстро поделиться номером телефона, нажмите кнопку «📱 Отправить номер телефона» ниже 👇\n"
+        "Или напишите «Пропустить», если не хотите менять контакт.",
         reply_markup=contact,
+    )
+    await message.answer(
+        "Можете пропустить контакты",
+        reply_markup=menu_skip,
     )
     await state.set_state(EditProductState.waiting_contact)
 
@@ -606,30 +630,43 @@ async def set_price_negotiable_edit(callback: CallbackQuery, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def edit_contact(message: Message, state: FSMContext):
+    if message.text == "Пропустить":
+        contact_value = None
+    else:
+        if message.contact:
+            contact_value = message.contact.phone_number
+        else:
+            raw = message.text.strip()
+            cleaned = await clean_phone(raw) if raw.startswith("+") else raw
+
+            if not re.match(CONTACT_REGEX, cleaned):
+                await message.answer(
+                    "❌ Неверный формат контактных данных.\n\n"
+                    "Введите один из вариантов:\n"
+                    "• Телефон (`+7`, `+380`, `+8`)\n"
+                    "• Email (`example@mail.com`)\n"
+                    "• Telegram (`@username`)"
+                )
+                return
+            contact_value = cleaned
+
     user_data = await state.get_data()
     product_id = user_data["edit_product_id"]
 
-    # ✅ Контакт через кнопку
-    if message.contact:
-        contact_value = message.contact.phone_number
+    # Формируем kwargs для обновления только с теми полями, что были изменены
+    update_kwargs = {}
+    for key in ("new_name", "new_description", "new_price"):
+        if user_data.get(key) is not None:
+            update_kwargs[key[4:]] = user_data[key]  # убираем "new_"
+    if contact_value is not None:
+        update_kwargs["contact"] = contact_value
 
-    # ✍️ Контакт введён вручную
-    elif message.text:
-        raw = message.text.strip()
-        cleaned = await clean_phone(raw) if raw.startswith("+") else raw
-
-        if not re.match(CONTACT_REGEX, cleaned):
-            await message.answer(
-                "❌ Неверный формат контактных данных.\n\n"
-                "Введите один из вариантов:\n"
-                "• Телефон (`+7`, `+380`, `+8`)\n"
-                "• Email (`example@mail.com`)\n"
-                "• Telegram (`@username`)"
-            )
-            return
-        contact_value = cleaned
-    else:
-        await message.answer("❌ Не удалось получить контакт. Попробуйте снова.")
+    if not update_kwargs:
+        await message.answer(
+            "⚠️ Вы не изменили ни одного поля объявления.",
+            reply_markup=menu_start,
+        )
+        await state.clear()
         return
 
     async with db_helper.session_factory() as session:
@@ -637,10 +674,7 @@ async def edit_contact(message: Message, state: FSMContext):
             product_id=product_id,
             telegram_id=message.from_user.id,
             session=session,
-            name=user_data["new_name"],
-            description=user_data["new_description"],
-            price=user_data["new_price"],
-            contact=contact_value,
+            **update_kwargs,
         )
 
     if updated_product:
