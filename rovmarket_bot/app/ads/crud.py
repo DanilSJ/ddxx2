@@ -140,7 +140,12 @@ async def get_user_product_with_photos(
     """Получить объявление пользователя по id с фотографиями."""
     stmt = (
         select(Product)
-        .options(selectinload(Product.photos))
+        .options(
+            selectinload(Product.photos),
+            selectinload(Product.category),
+            selectinload(Product.user),
+            selectinload(Product.views),
+        )
         .join(User)
         .where(Product.id == product_id, User.telegram_id == telegram_id)
         .limit(1)

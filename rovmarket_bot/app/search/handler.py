@@ -661,7 +661,10 @@ async def show_products_by_category(
 
         pagination_keyboard = InlineKeyboardMarkup(inline_keyboard=[nav_buttons])
 
-        info_text = f"📂 Категория: {category_name}\nСтраница {page} из {total_pages} (всего {total} объявлений)"
+        info_text = (
+            f"📂 Категория: {category_name}\n"
+            f"Страница {page} из {total_pages} (в этой категории {total} товаров)"
+        )
 
         if isinstance(message_or_callback, Message):
             await message_or_callback.answer(
@@ -758,7 +761,10 @@ async def show_products_by_category_filtered(
             price_min=price_min,
             price_max=price_max,
         )
-        info_text = f"📂 Категория: {category_name}\nСтраница {page} из {total_pages} (всего {total} объявлений)"
+        info_text = (
+            f"📂 Категория: {category_name}\n"
+            f"Страница {page} из {total_pages} (в этой категории {total} товаров)"
+        )
 
         if isinstance(message_or_callback, Message):
             await message_or_callback.answer(info_text, reply_markup=pagination_kb)

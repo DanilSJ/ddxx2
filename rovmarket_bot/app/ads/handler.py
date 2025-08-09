@@ -5,7 +5,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     Message,
     CallbackQuery,
+    InputMediaPhoto,
 )
+from html import escape
 
 from rovmarket_bot.app.start.keyboard import menu_start
 from rovmarket_bot.core.cache import check_rate_limit
@@ -21,6 +23,7 @@ from rovmarket_bot.app.ads.crud import (
 from rovmarket_bot.app.settings.crud import get_or_create_bot_settings
 from rovmarket_bot.app.admin.crud import get_admin_users
 from rovmarket_bot.core.logger import get_component_logger
+from aiogram.exceptions import TelegramBadRequest
 
 
 router = Router()
@@ -87,21 +90,25 @@ async def send_user_products(
     """Отправить объявления пользователя с пагинацией"""
 
     for product in products:
-        # Формируем описание объявления
-        price_text = f"Цена: {product.price} ₽" if product.price else "Цена: Договорная"
-        category_text = f"Категория: {product.category.name}"
-        date_text = f"Дата: {product.created_at.strftime('%d.%m.%Y %H:%M')}"
-        views_count = len(product.views) if product.views else 0
-        views_text = f"Просмотры: {views_count}"
+        # Формируем красивое описание объявления (HTML)
+        name = escape(product.name or "")
+        description = escape(product.description or "")
+        category_name = escape(getattr(product.category, "name", "—") or "—")
+        price_str = (
+            f"{product.price:,}".replace(",", " ") + " ₽" if product.price else "Договорная"
+        )
+        contact = escape(product.contact or "")
+        date_str = product.created_at.strftime("%d.%m.%Y %H:%M")
+        views_count = len(product.views) if getattr(product, "views", None) else 0
 
         caption = (
-            f"📋 {product.name}\n\n"
-            f"📝 {product.description}\n\n"
-            f"💰 {price_text}\n"
-            f"📂 {category_text}\n"
-            f"📞 {product.contact}\n"
-            f"📅 {date_text}\n"
-            f"👥 {views_text}"
+            f"<b>📋 {name}</b>\n\n"
+            f"📝 {description}\n\n"
+            f"💰 <b>Цена:</b> {price_str}\n"
+            f"📂 <b>Категория:</b> {category_name}\n"
+            f"📞 <b>Контакты:</b> {contact}\n"
+            f"📅 <b>Дата:</b> {date_str}\n"
+            f"👥 <b>Просмотры:</b> {views_count}"
         )
 
         # Отправляем единое сообщение с кнопками действий
@@ -121,7 +128,7 @@ async def send_user_products(
                 ],
                 [
                     InlineKeyboardButton(
-                        text="Показать фотографию",
+                        text="Показать фотографии",
                         callback_data=f"show_photos_{product.id}",
                     )
                 ],
@@ -129,11 +136,14 @@ async def send_user_products(
         )
         if product.photos:
             first_photo_url = product.photos[0].photo_url
-            await message.answer_photo(
-                photo=first_photo_url, caption=caption, reply_markup=actions_keyboard
-            )
+            try:
+                await message.answer_photo(
+                    photo=first_photo_url, caption=caption, reply_markup=actions_keyboard, parse_mode="HTML"
+                )
+            except TelegramBadRequest:
+                await message.answer(caption, reply_markup=actions_keyboard, parse_mode="HTML")
         else:
-            await message.answer(caption, reply_markup=actions_keyboard)
+            await message.answer(caption, reply_markup=actions_keyboard, parse_mode="HTML")
 
     # Создаем клавиатуру для навигации
     keyboard = create_pagination_keyboard(current_page, total_count)
@@ -248,14 +258,16 @@ async def unpublish_product(callback: CallbackQuery):
         logger.info(
             "Unpublished product_id=%s by user_id=%s", product_id, callback.from_user.id
         )
-        await callback.answer("Объявление снято с публикации")
+        await callback.message.answer("Объявление снято с публикации ✅")
+        await callback.answer()
     else:
         logger.warning(
             "Unpublish failed (not owner or already unpublished): product_id=%s user_id=%s",
             product_id,
             callback.from_user.id,
         )
-        await callback.answer("Не удалось снять с публикации", show_alert=False)
+        await callback.message.answer("Не удалось снять с публикации")
+        await callback.answer()
 
 
 @router.callback_query(F.data.startswith("publish_"))
@@ -303,21 +315,22 @@ async def publish_product(callback: CallbackQuery):
                         admin.telegram_id,
                     )
 
-    # Сообщение пользователю
+    # Сообщение пользователю в чат
     if product.publication is True:
         logger.info("Product published immediately product_id=%s", product.id)
-        await callback.answer("Объявление опубликовано сразу ✅")
+        await callback.message.answer("Объявление опубликовано сразу ✅")
     elif product.publication is None:
         logger.info("Product sent to moderation product_id=%s", product.id)
-        await callback.answer("Отправлено на модерацию ⏳")
+        await callback.message.answer("Объявление отправлено на модерацию ⏳")
     else:
         logger.info("Product publication status updated product_id=%s", product.id)
-        await callback.answer("Статус объявления обновлён")
+        await callback.message.answer("Статус объявления обновлён")
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("show_photos_"))
 async def show_product_photos(callback: CallbackQuery):
-    """Показать одну фотографию объявления (первую)."""
+    """Показать все фотографии объявления медиа-группой."""
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
@@ -350,8 +363,55 @@ async def show_product_photos(callback: CallbackQuery):
         await callback.answer("Фотографии отсутствуют", show_alert=False)
         return
 
-    first_photo = product.photos[0]
-    await callback.message.answer_photo(
-        photo=first_photo.photo_url, caption=product.name
+    # Подготовим красивую подпись (HTML)
+    name = escape(product.name or "")
+    description = escape(product.description or "")
+    category_name = escape(getattr(product.category, "name", "—") or "—")
+    price_str = (
+        f"{product.price:,}".replace(",", " ") + " ₽" if product.price else "Договорная"
     )
+    contact = escape(product.contact or "")
+    date_str = product.created_at.strftime("%d.%m.%Y %H:%M")
+    views_count = len(product.views) if getattr(product, "views", None) else 0
+
+    full_caption = (
+        f"<b>📋 {name}</b>\n\n"
+        f"📝 {description}\n\n"
+        f"💰 <b>Цена:</b> {price_str}\n"
+        f"📂 <b>Категория:</b> {category_name}\n"
+        f"📞 <b>Контакты:</b> {contact}\n"
+        f"📅 <b>Дата:</b> {date_str}\n"
+        f"👥 <b>Просмотры:</b> {views_count}"
+    )
+
+    # Собираем и отправляем медиа-группу (батчами по 10)
+    photo_urls = [p.photo_url for p in product.photos]
+
+    if len(photo_urls) == 1:
+        try:
+            await callback.message.answer_photo(
+                photo=photo_urls[0], caption=full_caption, parse_mode="HTML"
+            )
+        except TelegramBadRequest:
+            await callback.message.answer(full_caption, parse_mode="HTML")
+        await callback.answer()
+        return
+
+    first_batch = True
+    for start in range(0, len(photo_urls), 10):
+        chunk = photo_urls[start : start + 10]
+        media = []
+        for idx, url in enumerate(chunk):
+            if first_batch and idx == 0:
+                media.append(InputMediaPhoto(media=url, caption=full_caption, parse_mode="HTML"))
+            else:
+                media.append(InputMediaPhoto(media=url))
+        try:
+            await callback.bot.send_media_group(
+                chat_id=callback.message.chat.id, media=media
+            )
+        except TelegramBadRequest:
+            await callback.message.answer(full_caption, parse_mode="HTML")
+        first_batch = False
+
     await callback.answer()

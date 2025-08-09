@@ -20,7 +20,10 @@ from rovmarket_bot.app.settings.crud import (
     update_bot_settings,
 )
 from .states import AdCreationStates
-from rovmarket_bot.core.cache import invalidate_cache_on_new_ad
+from rovmarket_bot.core.cache import (
+    invalidate_cache_on_new_ad,
+    invalidate_categories_cache,
+)
 from rovmarket_bot.app.search.redis_search import index_product_in_redis
 from rovmarket_bot.core.config import bot
 
@@ -710,6 +713,7 @@ async def category_description_entered(message: Message, state: FSMContext):
         "Категория успешно создана ✅",
         reply_markup=menu_back,
     )
+    await invalidate_categories_cache()
     await state.clear()
 
 
