@@ -170,9 +170,11 @@ async def all_users_paginated(callback: CallbackQuery):
     except ValueError:
         page = 1
 
+    USERS_PER_PAGE = 5  # Показываем по 5 пользователей за раз
+
     async with db_helper.session_factory() as session:
         total_users = await get_users_count(session)
-        users = await get_users_page(session, page)
+        users = await get_users_page(session, page, USERS_PER_PAGE)
         view_counts = await get_users_view_counts(session)
 
     if not users:
@@ -180,48 +182,73 @@ async def all_users_paginated(callback: CallbackQuery):
         await callback.answer()
         return
 
-    lines = [f"👥 <b>Всего пользователей:</b> {total_users}\n🔻 Список:"]
+    # Заголовок с общей информацией (только для первой страницы)
+    if page == 1:
+        header = f"👥 <b>Всего пользователей:</b> {total_users}\n🔻 Список (страница {page}):\n\n"
+    else:
+        header = f"🔻 Список (страница {page}):\n\n"
+
+    # Формируем сообщение для текущей страницы
+    current_message = header
+    messages = []
 
     for user in users:
         views = view_counts.get(user.id, 0)
-
-        lines.append(
+        user_info = (
             f"🆔 <b>ID:</b> {user.id}\n"
             f"👤 <b>Telegram ID:</b> <code>{user.telegram_id}</code>\n"
             f"🔗 <b>Username:</b> @{user.username if user.username else '—'}\n"
             f"🛡️ <b>Админ:</b> {'✅' if user.admin else '❌'}\n"
             f"👁️ <b>Просмотров:</b> {views}\n"
             f"🕓 <b>Зарегистрирован:</b> {user.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-            f"──────────────"
+            f"──────────────\n\n"
         )
 
-    text = "\n".join(lines)
+        # Если добавление нового пользователя превысит лимит, сохраняем текущее сообщение и начинаем новое
+        if len(current_message + user_info) > 4000:
+            messages.append(current_message)
+            current_message = user_info
+        else:
+            current_message += user_info
 
-    # Пагинация
+    if current_message:
+        messages.append(current_message)
+
     # Пагинация
     total_pages = (total_users + USERS_PER_PAGE - 1) // USERS_PER_PAGE
     keyboard = []
 
-    nav_buttons = []
-    if page > 1:
-        nav_buttons.append(
-            InlineKeyboardButton(text="⬅️", callback_data=f"all_users?page={page - 1}")
-        )
+    # Кнопка "Загрузить еще" если есть еще пользователи
     if page < total_pages:
-        nav_buttons.append(
-            InlineKeyboardButton(text="➡️", callback_data=f"all_users?page={page + 1}")
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text="⬇️ Загрузить еще", callback_data=f"all_users={page + 1}"
+                )
+            ]
         )
 
-    if nav_buttons:
-        keyboard.append(nav_buttons)
-
-    # Добавляем кнопку "Назад"
+    # Кнопка "Назад"
     keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")])
 
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-    # Отправка
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
+    # Отправляем все сообщения
+    for i, message_text in enumerate(messages):
+        # Для последнего сообщения добавляем клавиатуру
+        reply_markup = markup if i == len(messages) - 1 else None
+
+        if page == 1 and i == 0:
+            # Первое сообщение первой страницы - редактируем
+            await callback.message.edit_text(
+                message_text, parse_mode="HTML", reply_markup=reply_markup
+            )
+        else:
+            # Все остальные сообщения - отправляем новые
+            await callback.message.answer(
+                message_text, parse_mode="HTML", reply_markup=reply_markup
+            )
+
     await callback.answer()
 
 

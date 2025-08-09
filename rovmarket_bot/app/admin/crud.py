@@ -42,13 +42,10 @@ async def get_users_count(session) -> int:
     return total
 
 
-async def get_users_page(session, page: int):
-    offset = (page - 1) * USERS_PER_PAGE
+async def get_users_page(session: AsyncSession, page: int, per_page: int):
+    offset = (page - 1) * per_page
     result = await session.execute(
-        select(User)
-        .order_by(User.created_at.desc())
-        .offset(offset)
-        .limit(USERS_PER_PAGE)
+        select(User).order_by(User.created_at.desc()).offset(offset).limit(per_page)
     )
     users = result.scalars().all()
     return users
