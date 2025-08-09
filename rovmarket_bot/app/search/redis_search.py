@@ -1,3 +1,5 @@
+import re
+
 from redis.asyncio import Redis
 from redis.commands.search.query import Query
 from sqlalchemy import select
@@ -33,20 +35,29 @@ async def search_in_redis_original(text: str, session: AsyncSession, limit: int 
     try:
         logger.info("RedisSearch query: %s", text)
 
-        # Ищем все числа в тексте для поиска по цене
-        numbers = findall(r"\d+", text)
-        if numbers:
-            logger.info("Numbers extracted from query: %s", numbers)
+        # Ищем числа, которые могут содержать пробелы, запятые, дефисы внутри
+        # Регулярка: число, возможно с пробелами, запятыми, дефисами внутри
+        raw_numbers = re.findall(r"\d[\d\s,.-]*\d|\d", text)
+        clean_numbers = []
 
-        # Формируем часть запроса для price, если есть числа
+        for raw_num in raw_numbers:
+            # Удаляем пробелы, запятые, дефисы
+            clean_num = re.sub(r"[\s,.-]", "", raw_num)
+            if clean_num.isdigit():
+                clean_numbers.append(clean_num)
+
+        if clean_numbers:
+            logger.info("Numbers extracted and cleaned from query: %s", clean_numbers)
+
         price_query = ""
-        if numbers:
-            price_ranges = " | ".join([f"@price:[{num} {num}]" for num in numbers])
+        if clean_numbers:
+            price_ranges = " | ".join(
+                [f"@price:[{num} {num}]" for num in clean_numbers]
+            )
             price_query = f" | {price_ranges}"
         if price_query:
             logger.info("Price subquery: %s", price_query)
 
-        # Основной запрос по name и description + price
         query_str = f"@name:{text} | @description:{text}{price_query}"
         logger.info("RedisSearch final query: %s", query_str)
 

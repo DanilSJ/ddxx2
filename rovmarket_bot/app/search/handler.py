@@ -37,6 +37,17 @@ class Search(StatesGroup):
     complaint = State()
 
 
+def format_price(price):
+    try:
+        # Попытка преобразовать в число
+        price_int = int(price)
+        # Форматируем с пробелами для тысяч и добавляем ₽
+        return f"{price_int:,}".replace(",", " ") + " ₽"
+    except (ValueError, TypeError):
+        # Если цена не число, возвращаем её как есть
+        return price
+
+
 @router.message(Command("search"))
 async def cmd_search(message: Message, state: FSMContext):
     logger.info("/search requested by user_id=%s", message.from_user.id)
@@ -180,7 +191,9 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                 await message.answer(
                     "Нет объявлений на этой странице.", reply_markup=pagination_keyboard
                 )
-                logger.info("No ads on page=%s for user_id=%s", page, message.from_user.id)
+                logger.info(
+                    "No ads on page=%s for user_id=%s", page, message.from_user.id
+                )
                 return
 
             for pid in page_ids:
@@ -190,11 +203,12 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                 if len(desc) > 100:
                     desc = desc[:100] + "..."
                 price = product_data.get("price")
-                if not price:
+                if price:
+                    price = format_price(price)
+                else:
                     price = "договорная"
                 text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 Цена: {price}"
                 photos = photos_map.get(pid, [])
-                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
                 details_markup = InlineKeyboardMarkup(
                     inline_keyboard=[
@@ -221,7 +235,9 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
             )
         else:
             await show_ads_page(message, state, 0)
-            logger.info("Cache miss, fallback to page=0 for user_id=%s", message.from_user.id)
+            logger.info(
+                "Cache miss, fallback to page=0 for user_id=%s", message.from_user.id
+            )
 
 
 @router.message(
@@ -256,7 +272,9 @@ async def search_ads(message: Message, state: FSMContext):
             desc = desc[:100] + "..."
         product_id = item.get("id")
         price = item.get("price")
-        if not price:
+        if price:
+            price = format_price(price)
+        else:
             price = "договорная"
         text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 {price}"
         photos = item.get("photos", [])
@@ -311,7 +329,11 @@ async def show_details(callback: CallbackQuery):
     name = product.get("name", "Без названия")
     desc = product.get("description", "Без описания")
 
-    price = product.get("price") or "договорная"
+    price = product.get("price")
+    if price:
+        price = format_price(price)
+    else:
+        price = "договорная"
     contact = product.get("contact", "-")
 
     geo = product.get("geo")
@@ -412,7 +434,11 @@ async def show_photos(callback: CallbackQuery):
 
     name = product.get("name", "Без названия")
     desc = product.get("description", "Без описания")
-    price = product.get("price") or "договорная"
+    price = product.get("price")
+    if price:
+        price = format_price(price)
+    else:
+        price = "договорная"
     contact = product.get("contact", "-")
 
     geo = product.get("geo")
@@ -594,7 +620,9 @@ async def show_products_by_category(
             if len(desc) > 100:
                 desc = desc[:100] + "..."
             price = fields.get("price")
-            if not price:
+            if price:
+                price = format_price(price)
+            else:
                 price = "договорная"
             text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 Цена: {price}"
             photos = photos_map.get(pid, [])
@@ -717,7 +745,11 @@ async def show_products_by_category_filtered(
             desc = fields.get("description", "Без описания")
             if len(desc) > 100:
                 desc = desc[:100] + "..."
-            price = fields.get("price") or "договорная"
+            price = fields.get("price")
+            if price:
+                price = format_price(price)
+            else:
+                price = "договорная"
             text = f"📌 {name}\n" f"💬 {desc}\n" f"💰 Цена: {price}"
             photos = photos_map.get(pid, [])
 

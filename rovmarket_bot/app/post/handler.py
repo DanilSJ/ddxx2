@@ -129,7 +129,9 @@ async def button_post(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("page:"))
 async def paginate_categories(callback: CallbackQuery, state: FSMContext):
     page = int(callback.data.split(":")[1])
-    logger.info("Post categories pagination user_id=%s page=%s", callback.from_user.id, page)
+    logger.info(
+        "Post categories pagination user_id=%s page=%s", callback.from_user.id, page
+    )
     await send_category_page(callback, state, page=page)
     await callback.answer()
 
@@ -352,17 +354,39 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def process_price(message: Message, state: FSMContext):
-    if not message.text.isdigit():
-        logger.warning(
-            "Invalid price entered by user_id=%s value=%s", message.from_user.id, message.text
-        )
-        await message.answer("🚫 Цена должна быть числом. Попробуйте снова 💡")
-        return
+    price_text = message.text.strip().lower()
 
-    await state.update_data(price=int(message.text))
+    if price_text == "договорная":
+        price = None
+    else:
+        # Убираем пробелы, точки, тире и подчёркивания
+        clean_text = re.sub(r"[ \.\-_]", "", price_text)
+
+        # Формат с "к", "кк" и т.д.
+        match = re.match(r"(\d+)(к*)$", clean_text)
+        if not match:
+            logger.warning(
+                "Invalid price format entered by user_id=%s value=%s",
+                message.from_user.id,
+                message.text,
+            )
+            await message.answer(
+                "❌ Некорректный формат цены.\n\n"
+                "Введите только цифры или используйте формат типа:\n"
+                "• `100к` (100 000)\n"
+                "• `250кк` (250 000 000)\n"
+                "или напишите «Договорная»."
+            )
+            return
+
+        number_part = int(match.group(1))
+        k_multiplier = 1000 ** len(match.group(2))
+        price = number_part * k_multiplier
+
+    await state.update_data(price=price)
 
     await message.answer(
-        "**📞 Пожалуйста, отправьте ваши контактные данные:**\n\n"
+        "📞 Пожалуйста, отправьте ваши контактные данные:\n\n"
         "— Номер телефона (начиная с `+7`, `+380` или `+8`)\n"
         "— Email (например, `example@mail.com`)\n"
         "— Telegram username (начиная с `@`, например `@username`)\n\n"

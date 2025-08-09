@@ -153,3 +153,46 @@ async def get_user_product_with_photos(
 
     result = await session.execute(stmt)
     return result.unique().scalar_one_or_none()
+
+
+async def get_user_product_by_id(
+    product_id: int, telegram_id: int, session: AsyncSession
+) -> Product | None:
+    """Получить объявление по ID, только если оно принадлежит пользователю."""
+    stmt = (
+        select(Product)
+        .options(
+            selectinload(Product.photos),
+            selectinload(Product.category),
+            selectinload(Product.user),
+        )
+        .join(User)
+        .where(Product.id == product_id, User.telegram_id == telegram_id)
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.unique().scalar_one_or_none()
+
+
+async def update_user_product(
+    product_id: int, telegram_id: int, session: AsyncSession, **kwargs
+) -> Product | None:
+    """Обновить поля объявления, принадлежащего пользователю."""
+    stmt = (
+        select(Product)
+        .join(User)
+        .where(Product.id == product_id, User.telegram_id == telegram_id)
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    product: Product | None = result.unique().scalar_one_or_none()
+    if not product:
+        return None
+
+    for field, value in kwargs.items():
+        if hasattr(product, field):
+            setattr(product, field, value)
+
+    await session.commit()
+    await session.refresh(product)
+    return product
