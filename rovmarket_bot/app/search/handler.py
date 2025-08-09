@@ -310,8 +310,6 @@ async def show_details(callback: CallbackQuery):
 
     name = product.get("name", "Без названия")
     desc = product.get("description", "Без описания")
-    if len(desc) > 100:
-        desc = desc[:100] + "..."
 
     price = product.get("price") or "договорная"
     contact = product.get("contact", "-")

@@ -250,6 +250,26 @@ async def unpublish_product(callback: CallbackQuery):
         return
 
     async with db_helper.session_factory() as session:
+        # Проверяем текущее состояние публикации
+        current_product = await get_user_product_with_photos(
+            product_id=product_id, telegram_id=callback.from_user.id, session=session
+        )
+
+        if current_product is None:
+            logger.warning(
+                "Unpublish failed: product not found or not owned. product_id=%s user_id=%s",
+                product_id,
+                callback.from_user.id,
+            )
+            await callback.message.answer("Не удалось снять с публикации")
+            await callback.answer()
+            return
+
+        if current_product.publication is False:
+            await callback.message.answer("Объявление уже снято с публикации")
+            await callback.answer()
+            return
+
         updated = await unpublish_user_product(
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
@@ -281,12 +301,30 @@ async def publish_product(callback: CallbackQuery):
         return
 
     async with db_helper.session_factory() as session:
+        # Предварительно проверяем текущее состояние
+        current_product = await get_user_product_with_photos(
+            product_id=product_id, telegram_id=callback.from_user.id, session=session
+        )
+        if current_product is None:
+            logger.warning(
+                "Publish failed: product not found or not owned. product_id=%s user_id=%s",
+                product_id,
+                callback.from_user.id,
+            )
+            await callback.answer("Не удалось опубликовать", show_alert=False)
+            return
+
+        if current_product.publication is True:
+            await callback.message.answer("Объявление уже находится в публикации")
+            await callback.answer()
+            return
+
         product = await publish_user_product(
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
         if product is None:
             logger.warning(
-                "Publish failed: product not found or not owned. product_id=%s user_id=%s",
+                "Publish failed after pre-check: product not found or not owned. product_id=%s user_id=%s",
                 product_id,
                 callback.from_user.id,
             )

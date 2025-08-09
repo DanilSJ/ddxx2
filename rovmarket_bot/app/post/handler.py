@@ -188,12 +188,12 @@ async def process_categories(message: Message, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def process_name(message: Message, state: FSMContext):
-    if contains_profanity(message.text):
-        logger.warning("Profanity detected in name by user_id=%s", message.from_user.id)
-        await message.answer(
-            "🚫 В названии обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
-        )
-        return
+    # if contains_profanity(message.text):
+    #     logger.warning("Profanity detected in name by user_id=%s", message.from_user.id)
+    #     await message.answer(
+    #         "🚫 В названии обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
+    #     )
+    #     return
 
     await state.update_data(name=message.text)
     await message.answer("📝 Теперь введите *описание* вашего объявления:")
@@ -216,14 +216,14 @@ async def process_name(message: Message, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def process_description(message: Message, state: FSMContext):
-    if contains_profanity(message.text):
-        logger.warning(
-            "Profanity detected in description by user_id=%s", message.from_user.id
-        )
-        await message.answer(
-            "🚫 В описании обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
-        )
-        return
+    # if contains_profanity(message.text):
+    #     logger.warning(
+    #         "Profanity detected in description by user_id=%s", message.from_user.id
+    #     )
+    #     await message.answer(
+    #         "🚫 В описании обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
+    #     )
+    #     return
 
     await state.update_data(description=message.text)
     await message.answer(
