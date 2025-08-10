@@ -561,7 +561,7 @@ async def show_publication(callback: CallbackQuery):
                 [
                     InlineKeyboardButton(
                         text="📷 Показать фото",
-                        callback_data=f"show_photos_admin:{product.id}",
+                        callback_data=f"button_show_photos_admin:{product.id}",
                     )
                 ],
                 [
@@ -588,9 +588,8 @@ async def show_publication(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("show_photos_admin:"))
-async def show_photos(callback: CallbackQuery):
-    print(f"show_photos:{callback.data}")
+@router.callback_query(F.data.startswith("button_show_photos_admin:"))
+async def show_photos_admin(callback: CallbackQuery):
     product_id = int(callback.data.split(":")[1])
     async with db_helper.session_factory() as session:
         product = await get_product_with_photos_and_user(session, product_id)
@@ -617,6 +616,10 @@ async def approve_ad(callback: CallbackQuery):
 
         if not product:
             await callback.answer("Объявление не найдено", show_alert=True)
+            return
+
+        if product.publication:
+            await callback.answer("Объявление уже опубликовано", show_alert=True)
             return
 
         product.publication = True
@@ -707,6 +710,10 @@ async def decline_ad(callback: CallbackQuery):
 
         if not product:
             await callback.answer("Объявление не найдено", show_alert=True)
+            return
+
+        if not product.publication:
+            await callback.answer("Объявление уже отклонено", show_alert=True)
             return
 
         product.publication = False
