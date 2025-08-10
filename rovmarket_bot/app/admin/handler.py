@@ -799,10 +799,8 @@ async def category_description_entered(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("all_ads"))
 async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
-    # Устанавливаем состояние для перехвата текстовых сообщений как поисковых запросов
     await state.set_state(AdsListStates.waiting_for_search)
 
-    # Парсим страницу из callback_data: "all_ads?page=1"
     page = 1
     parts = callback.data.split("?")
     if len(parts) == 2 and parts[1].startswith("page="):
@@ -815,7 +813,18 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
         total_ads = await get_published_products_count(session)
         products = await get_published_products_page(session, page)
 
-    # Заголовок и навигация
+        # Подсчёт просмотров для каждого объявления в списке (чтобы не делать отдельный запрос на каждый)
+        product_ids = [p.id for p in products]
+        if product_ids:
+            result = await session.execute(
+                select(ProductView.product_id, func.count(ProductView.user_id))
+                .where(ProductView.product_id.in_(product_ids))
+                .group_by(ProductView.product_id)
+            )
+            views_counts = dict(result.all())  # {product_id: views_count}
+        else:
+            views_counts = {}
+
     header_lines = [
         f"📢 <b>Опубликованные объявления</b>",
         f"Всего: <b>{total_ads}</b>",
@@ -823,7 +832,6 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     ]
     header_text = "\n".join(header_lines)
 
-    # Кнопки навигации
     total_pages = (total_ads + ADS_PER_PAGE - 1) // ADS_PER_PAGE if total_ads else 1
     nav_keyboard = []
     nav_buttons = []
@@ -842,12 +850,10 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     )
     nav_markup = InlineKeyboardMarkup(inline_keyboard=nav_keyboard)
 
-    # Покажем заголовок с пагинацией, обновив текущее сообщение
     await callback.message.edit_text(
         header_text, parse_mode="HTML", reply_markup=nav_markup
     )
 
-    # Отдельными сообщениями отправим объявления текущей страницы
     if not products:
         await callback.message.answer("На этой странице нет объявлений.")
         await callback.answer()
@@ -855,12 +861,14 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
 
     for product in products:
         first_photo = product.photos[0].photo_url if product.photos else None
+        views = views_counts.get(product.id, 0)  # исправлено: убрал str()
         caption = (
             f"<b>#{product.id} — {product.name}</b>\n\n"
             f"{product.description}\n\n"
             f"<b>Цена:</b> {product.price if product.price is not None else 'Не указана'}\n"
             f"<b>Контакт:</b> {product.contact}\n"
             f"<b>Дата:</b> {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            f"<b>Просмотры:</b> {views}\n"
         )
 
         buttons = InlineKeyboardMarkup(
