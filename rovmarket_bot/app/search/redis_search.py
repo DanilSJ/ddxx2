@@ -16,6 +16,7 @@ from redis.commands.search.index_definition import IndexDefinition, IndexType
 from redis.commands.search.field import TextField, NumericField
 
 from rovmarket_bot.core.models import Product
+from ...core.cache import invalidate_all_ads_cache
 
 REDIS_INDEX = "products"  # имя индекса
 
@@ -82,6 +83,7 @@ async def search_in_redis_original(text: str, session: AsyncSession, limit: int 
 
         if not product_ids:
             logger.info("No product_ids from Redis. Attempting to restore index data.")
+            await invalidate_all_ads_cache()
             await restore_redis_data(session)
             return []
 
