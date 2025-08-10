@@ -313,8 +313,6 @@ async def unpublish_product(callback: CallbackQuery):
             await callback.answer()
             return
 
-        await invalidate_all_ads_cache()
-
         updated = await unpublish_user_product(
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
@@ -325,6 +323,7 @@ async def unpublish_product(callback: CallbackQuery):
         )
         await callback.message.answer("Объявление снято с публикации ✅")
         await callback.answer()
+        await invalidate_all_ads_cache()
     else:
         logger.warning(
             "Unpublish failed (not owner or already unpublished): product_id=%s user_id=%s",
