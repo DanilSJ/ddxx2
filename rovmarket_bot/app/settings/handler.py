@@ -1,3 +1,6 @@
+from sqlalchemy import select
+
+
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -7,14 +10,15 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
 )
-from rovmarket_bot.core.models import db_helper
+from rovmarket_bot.core.models import db_helper, User
 from rovmarket_bot.app.start.handler import cmd_start
 from .crud import (
     get_categories_page,
     is_user_subscribed_to_category,
     toggle_category_subscription,
+    get_user_with_subscriptions,
 )
-from .keyboard import menu_settings
+from .keyboard import menu_settings, menu_notifications
 from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
 
@@ -57,8 +61,74 @@ async def button_notifications(message: Message, state: FSMContext):
         )
         return
     await state.clear()
-    await send_notifications_categories(message, state, 1)
+    await message.answer(
+        "🔔 *Уведомления*\n\n"
+        "Вы можете настроить, какие уведомления хотите получать:\n\n"
+        "📂 *Категории* — включить уведомления по выбранным категориям.\n"
+        "📢 *Все объявления* — получать уведомления обо всех новых объявлениях.",
+        reply_markup=menu_notifications,  # сюда вставьте клавиатуру с кнопками
+    )
     logger.info("Notifications settings opened by user_id=%s", message.from_user.id)
+
+
+@router.message(F.text == "📂 Категории (уведомления)")
+async def button_notifications_categories(message: Message, state: FSMContext):
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
+    await state.clear()
+    await send_notifications_categories(message, state, 1)
+    logger.info(
+        "Notifications categories settings opened by user_id=%s", message.from_user.id
+    )
+
+
+def make_toggle_notification_kb(enabled: bool) -> InlineKeyboardMarkup:
+    if enabled:
+        btn_text = "Выключить ❌"
+        callback_data = "notif_all_disable"
+    else:
+        btn_text = "Включить ✅"
+        callback_data = "notif_all_enable"
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=btn_text, callback_data=callback_data)]
+        ]
+    )
+    return kb
+
+
+@router.message(F.text == "📢 Все объявления (уведомления)")
+async def button_notifications_all_ads(message: Message, state: FSMContext):
+    # проверка лимита и очистка состояния, как у тебя
+
+    # получаем из базы текущее состояние notifications_all_ads для пользователя
+    async with db_helper.session_factory() as session:
+        user = await get_user_with_subscriptions(message.from_user.id, session)
+        enabled = False
+        if user:
+            enabled = user.notifications_all_ads  # или как у тебя называется поле
+
+    kb = make_toggle_notification_kb(enabled)
+    await message.answer("Все уведомления", reply_markup=kb)
+
+
+@router.callback_query(F.data.in_({"notif_all_enable", "notif_all_disable"}))
+async def toggle_all_notifications(callback: CallbackQuery):
+    enable = callback.data == "notif_all_enable"
+    async with db_helper.session_factory() as session:
+        user = await get_user_with_subscriptions(callback.from_user.id, session)
+        if user:
+            user.notifications_all_ads = enable
+            await session.commit()
+
+    kb = make_toggle_notification_kb(enable)
+    await callback.message.edit_reply_markup(reply_markup=kb)
+    await callback.answer(f"Уведомления {'включены' if enable else 'выключены'}")
 
 
 @router.message(F.text == "📋 Меню")

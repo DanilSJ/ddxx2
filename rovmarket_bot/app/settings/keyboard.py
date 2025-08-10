@@ -1,6 +1,8 @@
 from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
 )
 
 menu_settings = ReplyKeyboardMarkup(
@@ -18,10 +20,13 @@ menu_settings = ReplyKeyboardMarkup(
 menu_notifications = ReplyKeyboardMarkup(
     keyboard=[
         [
-            KeyboardButton(text="📂 Категории"),
+            KeyboardButton(text="📂 Категории (уведомления)"),
         ],
         [
-            KeyboardButton(text="📢 Все объявления"),
+            KeyboardButton(text="📢 Все объявления (уведомления)"),
+        ],
+        [
+            KeyboardButton(text="📋 Меню"),
         ],
     ],
     resize_keyboard=True,
