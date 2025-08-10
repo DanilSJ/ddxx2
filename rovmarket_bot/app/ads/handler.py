@@ -313,6 +313,8 @@ async def unpublish_product(callback: CallbackQuery):
             await callback.answer()
             return
 
+        await invalidate_all_ads_cache()
+
         updated = await unpublish_user_product(
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
