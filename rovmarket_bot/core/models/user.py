@@ -25,7 +25,7 @@ class User(Base):
 
     admin: Mapped[bool] = mapped_column(nullable=True, default=False)
 
-    notifications_all_ads: Mapped[bool] = mapped_column(default=True)
+    notifications_all_ads: Mapped[bool] = mapped_column(default=True, nullable=True)
 
     # Many-to-many: categories user subscribed to for notifications
     subscribed_categories = relationship(
