@@ -13,6 +13,8 @@ from aiogram.types import (
     InlineKeyboardButton,
     InputMediaPhoto,
 )
+from sqlalchemy import or_
+
 from rovmarket_bot.core.models import db_helper
 from .crud import *
 from .keyboard import menu_admin, menu_stats, menu_back, build_admin_settings_keyboard
@@ -626,7 +628,11 @@ async def approve_ad(callback: CallbackQuery):
         await session.commit()
 
         # Получаем всех пользователей, подписанных на все объявления
-        users_stmt = select(User).where(User.notifications_all_ads == True)
+        users_stmt = select(User).where(
+            or_(
+                User.notifications_all_ads == True, User.notifications_all_ads.is_(None)
+            )
+        )
         result = await session.execute(users_stmt)
         subscribed_users = result.scalars().all()
 
