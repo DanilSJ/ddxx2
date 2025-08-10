@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta, timezone
 
 from aiogram import Router, F
@@ -28,6 +29,17 @@ from rovmarket_bot.app.search.redis_search import index_product_in_redis
 from rovmarket_bot.core.config import bot
 
 router = Router()
+
+
+def format_price(price):
+    try:
+        # Попытка преобразовать в число
+        price_int = int(price)
+        # Форматируем с пробелами для тысяч и добавляем ₽
+        return f"{price_int:,}".replace(",", " ") + " ₽"
+    except (ValueError, TypeError):
+        # Если цена не число, возвращаем её как есть
+        return price
 
 
 # Состояния FSM для рассылки
@@ -610,51 +622,79 @@ async def approve_ad(callback: CallbackQuery):
         product.publication = True
         await session.commit()
 
+        # Получаем всех пользователей, подписанных на все объявления
+        users_stmt = select(User).where(User.notifications_all_ads == True)
+        result = await session.execute(users_stmt)
+        subscribed_users = result.scalars().all()
+
     await invalidate_cache_on_new_ad()
     await index_product_in_redis(product)
 
-    # Notify subscribers of the product's category
-    try:
-        category_id = product.category_id
-        # Exclude the ad owner from notifications
-        owner_user_id = product.user_id
-        # Query once; don't reuse session used above to avoid accidental expiration
-        async with db_helper.session_factory() as session2:
-            subscriber_tg_ids = await get_subscriber_telegram_ids_for_category(
-                session2, category_id, exclude_user_id=owner_user_id
-            )
+    # Формируем текст рассылки
 
-        if subscriber_tg_ids:
-            text_lines = [
-                "🆕 Новое объявление в вашей категории!",
-                f"📌 {product.name}",
-            ]
-            if product.price is not None:
-                text_lines.append(f"💰 Цена: {product.price}")
-            if product.description:
-                desc = product.description
-                if len(desc) > 200:
-                    desc = desc[:200] + "…"
-                text_lines.append(f"💬 {desc}")
-            text_lines.append(f"ℹ️ Открыть детали в боте и посмотреть фото")
-            notify_text = "\n".join(text_lines)
+    # Контакт
+    contact = product.contact.strip() if product.contact else ""
+    if (
+        re.fullmatch(r"\d{6,}", contact)
+        or re.fullmatch(r"[78]\d{6,}", contact)
+        or re.fullmatch(r"380\d{6,}", contact)
+    ):
+        if not contact.startswith("+"):
+            contact = "+" + contact
+    elif re.match(r"^(8\d{6,}|7\d{6,}|380\d{6,})$", contact):
+        contact = "+" + contact
 
-            # Try to include first photo if present; otherwise send plain text
-            first_photo = product.photos[0].photo_url if product.photos else None
-            for tg_id in subscriber_tg_ids:
-                try:
-                    if first_photo:
-                        await bot.send_photo(
-                            chat_id=tg_id, photo=first_photo, caption=notify_text
-                        )
-                    else:
-                        await bot.send_message(chat_id=tg_id, text=notify_text)
-                except Exception:
-                    # ignore individual failures to avoid blocking
-                    continue
-    except Exception:
-        # fail-safe: do not break approval flow on notify errors
-        pass
+    price = product.price
+    if price:
+        price = format_price(price)
+    else:
+        price = "договорная"
+
+    geo_text = "-"
+    if product.geo and isinstance(product.geo, dict):
+        lat = product.geo.get("latitude")
+        lon = product.geo.get("longitude")
+        if lat is not None and lon is not None:
+            geo_text = f"<a href='https://maps.google.com/?q={lat},{lon}'>Нажми, чтобы открыть карту</a>"
+
+    created_str = product.created_at.strftime("%d.%m.%Y") if product.created_at else "-"
+
+    full_text = (
+        f"📌 {product.name}\n"
+        f"💬 {product.description or 'Без описания'}\n"
+        f"💰 Цена: {price}\n"
+        f"\n📞 Контакт: {contact}\n"
+        f"📍 Геолокация: {geo_text}\n"
+        f"🕒 Дата создания: {created_str}"
+    )
+
+    # Берём первые 10 фото, если есть
+    photos = [p.photo_url for p in product.photos][:10]
+
+    # Рассылаем всем подписчикам, кроме автора
+    for user in subscribed_users:
+        try:
+            if not photos:
+                await callback.bot.send_message(
+                    user.telegram_id, full_text, parse_mode="HTML"
+                )
+            elif len(photos) == 1:
+                await callback.bot.send_photo(
+                    user.telegram_id,
+                    photos[0],
+                    caption=full_text,
+                    parse_mode="HTML",
+                )
+            else:
+                media_group = [
+                    InputMediaPhoto(
+                        media=photos[0], caption=full_text, parse_mode="HTML"
+                    )
+                ]
+                media_group += [InputMediaPhoto(media=photo) for photo in photos[1:]]
+                await callback.bot.send_media_group(user.telegram_id, media_group)
+        except Exception as e:
+            print(e)
 
     await callback.answer("Объявление принято ✅", show_alert=True)
 
