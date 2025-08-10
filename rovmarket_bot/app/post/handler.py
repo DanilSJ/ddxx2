@@ -2,12 +2,14 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
+from sqlalchemy import select
+
 from .crud import create_product
 from rovmarket_bot.core.cache import (
     get_categories_page_cached as get_categories_page,
     check_rate_limit,
 )
-from rovmarket_bot.core.models import db_helper
+from rovmarket_bot.core.models import db_helper, User
 from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
@@ -16,6 +18,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
+    InputMediaPhoto,
 )
 from rovmarket_bot.app.start.keyboard import menu_start
 from .keyboard import contractual, contact
@@ -30,6 +33,17 @@ router = Router()
 logger = get_component_logger("post")
 
 CONTACT_REGEX = r"^(?:\+7\d{10}|\+380\d{9}|\+8\d{10}|@[\w\d_]{5,32}|[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)$"
+
+
+def format_price(price):
+    try:
+        # Попытка преобразовать в число
+        price_int = int(price)
+        # Форматируем с пробелами для тысяч и добавляем ₽
+        return f"{price_int:,}".replace(",", " ") + " ₽"
+    except (ValueError, TypeError):
+        # Если цена не число, возвращаем её как есть
+        return price
 
 
 class Post(StatesGroup):
@@ -574,29 +588,91 @@ async def finalize_post(message: Message, state: FSMContext):
             logger.info(
                 "Product created id=%s by user_id=%s", product.id, message.from_user.id
             )
-            # Проверяем режим модерации — уведомляем админов только если модерация включена
-            settings_row = await get_or_create_bot_settings(session)
-            if bool(settings_row.moderation):
-                admins = await get_admin_users(session)
-                notify_text = (
-                    "🔔 Новое объявление ожидает проверки\n\n"
-                    f"ID: {product.id}\n"
-                    f"Название: {product.name}\n"
-                    f"Цена: {('Договорная' if product.price is None else product.price)}\n\n"
-                    "Перейдите в админ-панель для модерации."
-                )
-                for admin in admins:
-                    try:
+
+            # --- Фиксируем контакт ---
+            contact = product.contact.strip() if product.contact else ""
+            # Если это телефон
+            if (
+                re.fullmatch(r"\d{6,}", contact)
+                or re.fullmatch(r"[78]\d{6,}", contact)
+                or re.fullmatch(r"380\d{6,}", contact)
+            ):
+                # Добавляем плюс, если его нет
+                if not contact.startswith("+"):
+                    contact = "+" + contact
+            # Если контакт начинается с 8, 7 или 380 и без плюса
+            elif re.match(r"^(8\d{6,}|7\d{6,}|380\d{6,})$", contact):
+                contact = "+" + contact
+            # Если это не телефон (email или @username) — оставляем как есть
+            product.contact = contact
+
+            # --- Рассылаем всем, кто подписан на все объявления ---
+            users_stmt = select(User).where(User.notifications_all_ads == True)
+            result = await session.execute(users_stmt)
+            subscribed_users = result.scalars().all()
+
+            # Получаем фото
+            photos = data.get("photos", [])[:10]
+            price = data.get("price")
+            if price:
+                price = format_price(price)
+            else:
+                price = "договорная"
+
+            geo_text = "-"
+            if product.geo and isinstance(product.geo, dict):
+                lat = product.geo.get("latitude")
+                lon = product.geo.get("longitude")
+                if lat is not None and lon is not None:
+                    geo_text = f"<a href='https://maps.google.com/?q={lat},{lon}'>Нажми, чтобы открыть карту</a>"
+
+            created_str = (
+                product.created_at.strftime("%d.%m.%Y") if product.created_at else "-"
+            )
+
+            full_text = (
+                f"📌 {product.name}\n"
+                f"💬 {product.description or 'Без описания'}\n"
+                f"💰 Цена: {price}\n"
+                f"\n📞 Контакт: {contact}\n"
+                f"📍 Геолокация: {geo_text}\n"
+                f"🕒 Дата создания: {created_str}"
+            )
+
+            for user in subscribed_users:
+                # Пропускаем автора объявления
+                if user.telegram_id == message.from_user.id:
+                    continue
+
+                try:
+                    if not photos:
                         await message.bot.send_message(
-                            chat_id=admin.telegram_id, text=notify_text
+                            user.telegram_id, full_text, parse_mode="HTML"
                         )
-                    except Exception:
-                        # Игнорируем ошибки доставки отдельным администраторам
-                        logger.warning(
-                            "Failed to notify admin telegram_id=%s about new product id=%s",
-                            admin.telegram_id,
-                            product.id,
+                    elif len(photos) == 1:
+                        await message.bot.send_photo(
+                            user.telegram_id,
+                            photos[0],
+                            caption=full_text,
+                            parse_mode="HTML",
                         )
+                    else:
+                        media_group = [
+                            InputMediaPhoto(
+                                media=photos[0], caption=full_text, parse_mode="HTML"
+                            )
+                        ]
+                        media_group += [
+                            InputMediaPhoto(media=photo) for photo in photos[1:]
+                        ]
+                        await message.bot.send_media_group(
+                            user.telegram_id, media_group
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Не удалось отправить уведомление пользователю {user.telegram_id}: {e}"
+                    )
+
         except ValueError as e:
             logger.exception(
                 "Error creating product for user_id=%s: %s", message.from_user.id, e
