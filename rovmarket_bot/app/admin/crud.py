@@ -200,7 +200,7 @@ async def get_published_products_page(
         .options(selectinload(Product.photos), selectinload(Product.user))
         .order_by(Product.created_at.desc())
         .offset(offset)
-        .limit(per_page)
+        .limit(3)
     )
     return list(result.scalars().all())
 

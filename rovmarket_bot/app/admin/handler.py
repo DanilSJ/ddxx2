@@ -30,6 +30,9 @@ from rovmarket_bot.core.cache import (
 from rovmarket_bot.app.search.redis_search import index_product_in_redis
 from rovmarket_bot.core.config import bot
 
+ADS_PER_PAGE = 3
+
+
 router = Router()
 
 
@@ -731,6 +734,7 @@ async def approve_ad(callback: CallbackQuery):
 
     success_count = 0
     blocked_count = 0
+    blocked_users = []
 
     for user in subscribed_users:
         try:
@@ -756,15 +760,28 @@ async def approve_ad(callback: CallbackQuery):
 
             success_count += 1
 
-        except Exception as e:
+        except Exception:
             blocked_count += 1
+            if user.username:
+                blocked_users.append(f"@{user.username} ({user.telegram_id})")
+            else:
+                blocked_users.append(str(user.telegram_id))
 
-    await callback.answer(
+    # Отправляем итоговое сообщение
+    await callback.message.answer(
         f"Объявление принято ✅\n"
         f"Отправлено успешно: {success_count}\n"
-        f"Не удалось отправить (заблокировали бота или ошибка): {blocked_count}",
-        show_alert=True,
+        f"Не удалось отправить: {blocked_count}",
     )
+
+    # Если кто-то заблокировал — отправляем списком
+    if blocked_users:
+        text = "🚫 Заблокировали бота:\n" + "\n".join(blocked_users)
+
+        # Разбиваем на части, если текст слишком длинный
+        chunk_size = 4000  # чуть меньше лимита
+        for i in range(0, len(text), chunk_size):
+            await callback.message.answer(text[i : i + chunk_size])
 
 
 @router.callback_query(F.data.startswith("decline:"))
@@ -859,13 +876,22 @@ async def category_description_entered(message: Message, state: FSMContext):
     await state.clear()
 
 
-# ===== Публикованные объявления: список, пагинация, поиск, показ фото, снятие с публикации =====
-
-
 @router.callback_query(F.data.startswith("all_ads"))
 async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdsListStates.waiting_for_search)
 
+    # Получаем текущие сообщения с объявлениями из состояния
+    old_messages = await state.get_data()
+    old_msg_ids = old_messages.get("ads_msg_ids", [])
+
+    # Удаляем предыдущие сообщения, если они есть
+    for msg_id in old_msg_ids:
+        try:
+            await callback.message.bot.delete_message(callback.message.chat.id, msg_id)
+        except Exception:
+            pass  # Если сообщение уже удалено или ошибка, просто игнорируем
+
+    # Обновляем страницу
     page = 1
     parts = callback.data.split("?")
     if len(parts) == 2 and parts[1].startswith("page="):
@@ -876,9 +902,8 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
 
     async with db_helper.session_factory() as session:
         total_ads = await get_published_products_count(session)
-        products = await get_published_products_page(session, page)
+        products = await get_published_products_page(session, page, ADS_PER_PAGE)
 
-        # Подсчёт просмотров для каждого объявления в списке (чтобы не делать отдельный запрос на каждый)
         product_ids = [p.id for p in products]
         if product_ids:
             result = await session.execute(
@@ -886,7 +911,7 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
                 .where(ProductView.product_id.in_(product_ids))
                 .group_by(ProductView.product_id)
             )
-            views_counts = dict(result.all())  # {product_id: views_count}
+            views_counts = dict(result.all())
         else:
             views_counts = {}
 
@@ -898,23 +923,36 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     header_text = "\n".join(header_lines)
 
     total_pages = (total_ads + ADS_PER_PAGE - 1) // ADS_PER_PAGE if total_ads else 1
+
     nav_keyboard = []
     nav_buttons = []
+
     if page > 1:
         nav_buttons.append(
-            InlineKeyboardButton(text="⬅️", callback_data=f"all_ads?page={page - 1}")
+            InlineKeyboardButton(
+                text=f"⬅️ Стр. {page - 1}", callback_data=f"all_ads?page={page - 1}"
+            )
         )
+
+    nav_buttons.append(
+        InlineKeyboardButton(text=f"{page}/{total_pages}", callback_data="noop")
+    )
+
     if page < total_pages:
         nav_buttons.append(
-            InlineKeyboardButton(text="➡️", callback_data=f"all_ads?page={page + 1}")
+            InlineKeyboardButton(
+                text=f"Стр. {page + 1} ➡️", callback_data=f"all_ads?page={page + 1}"
+            )
         )
-    if nav_buttons:
-        nav_keyboard.append(nav_buttons)
+
+    nav_keyboard.append(nav_buttons)
     nav_keyboard.append(
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")]
     )
+
     nav_markup = InlineKeyboardMarkup(inline_keyboard=nav_keyboard)
 
+    # Обновляем главное сообщение с заголовком и кнопками
     await callback.message.edit_text(
         header_text, parse_mode="HTML", reply_markup=nav_markup
     )
@@ -924,9 +962,11 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
+    # Отправляем новые объявления и собираем их ID
+    new_msg_ids = []
     for product in products:
         first_photo = product.photos[0].photo_url if product.photos else None
-        views = views_counts.get(product.id, 0)  # исправлено: убрал str()
+        views = views_counts.get(product.id, 0)
         caption = (
             f"<b>#{product.id} — {product.name}</b>\n\n"
             f"{product.description}\n\n"
@@ -955,13 +995,18 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
         )
 
         if first_photo:
-            await callback.message.answer_photo(
+            sent_msg = await callback.message.answer_photo(
                 first_photo, caption=caption, parse_mode="HTML", reply_markup=buttons
             )
         else:
-            await callback.message.answer(
+            sent_msg = await callback.message.answer(
                 caption, parse_mode="HTML", reply_markup=buttons
             )
+
+        new_msg_ids.append(sent_msg.message_id)
+
+    # Сохраняем ID новых сообщений в состоянии
+    await state.update_data(ads_msg_ids=new_msg_ids)
 
     await callback.answer()
 
