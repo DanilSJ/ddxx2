@@ -20,6 +20,7 @@ class BotSettings(Base):
     # Only two toggles requested: moderation and logging
     moderation: Mapped[bool] = mapped_column(default=True, nullable=False)
     logging: Mapped[bool] = mapped_column(default=True, nullable=False)
+    notifications_all: Mapped[bool] = mapped_column(default=True, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -36,5 +37,3 @@ class BotSettings(Base):
     __table_args__ = (
         CheckConstraint("singleton_key = 1", name="bot_settings_singleton_check"),
     )
-
-
