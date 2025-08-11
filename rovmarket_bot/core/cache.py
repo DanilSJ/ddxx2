@@ -51,6 +51,9 @@ async def check_rate_limit(
         return True, 0
 
 
+from sqlalchemy import func
+
+
 async def get_categories_page_cached(
     session: AsyncSession, page: int = 1, limit: int = 10
 ):
@@ -61,13 +64,29 @@ async def get_categories_page_cached(
         return [Categories(**item) for item in json.loads(cached_data)]
 
     offset = (page - 1) * limit
-    stmt = select(Categories).offset(offset).limit(limit)
+
+    # Подсчёт количества объявлений в категориях
+    product_count = func.count(Product.id).label("ads_count")
+
+    stmt = (
+        select(Categories, product_count)
+        .outerjoin(Product, Product.category_id == Categories.id)
+        .group_by(Categories.id)
+        .order_by(product_count.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
     result = await session.execute(stmt)
-    categories = result.scalars().all()
+    categories_with_counts = result.all()
+
+    # Извлечь только категории (без количества объявлений)
+    categories = [row[0] for row in categories_with_counts]
 
     if categories:
         to_cache = [dict(id=c.id, name=c.name) for c in categories]
         await redis_cache.set(cache_key, json.dumps(to_cache), ex=CACHE_TIMEOUT)
+
     return categories
 
 
