@@ -592,17 +592,28 @@ async def ad_cancel(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "publication")
 async def show_publication(callback: CallbackQuery):
+    MAX_CAPTION_LENGTH = 750  # ограничение для подписи
+    MAX_DESCRIPTION_LENGTH = 600  # ограничение для описания
+
     async with db_helper.session_factory() as session:
         products = await get_unpublished_products(session)
 
     for product in products:
         first_photo = product.photos[0].photo_url if product.photos else None
+
+        description = product.description or ""
+        if len(description) > MAX_DESCRIPTION_LENGTH:
+            description = description[: MAX_DESCRIPTION_LENGTH - 3] + "..."
+
         caption = (
             f"<b>{product.name}</b>\n\n"
-            f"{product.description}\n\n"
+            f"{description}\n\n"
             f"<b>Цена:</b> {product.price or 'Не указана'}\n"
             f"<b>Контакт:</b> {product.contact}"
         )
+
+        if len(caption) > MAX_CAPTION_LENGTH:
+            caption = caption[: MAX_CAPTION_LENGTH - 3] + "..."
 
         buttons = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -624,14 +635,20 @@ async def show_publication(callback: CallbackQuery):
             ]
         )
 
-        if first_photo:
-            await callback.message.answer_photo(
-                first_photo, caption=caption, parse_mode="HTML", reply_markup=buttons
-            )
-        else:
-            await callback.message.answer(
-                caption, parse_mode="HTML", reply_markup=buttons
-            )
+        try:
+            if first_photo:
+                await callback.message.answer_photo(
+                    first_photo,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=buttons,
+                )
+            else:
+                await callback.message.answer(
+                    caption, parse_mode="HTML", reply_markup=buttons
+                )
+        except Exception as e:
+            pass
 
     await callback.answer()
 
@@ -876,7 +893,7 @@ async def category_description_entered(message: Message, state: FSMContext):
     await state.clear()
 
 
-@router.callback_query(F.data.startswith("all_ads"))
+@router.callback_query(F.data.startswith("all_ads_admin"))
 async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdsListStates.waiting_for_search)
 
@@ -930,7 +947,8 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     if page > 1:
         nav_buttons.append(
             InlineKeyboardButton(
-                text=f"⬅️ Стр. {page - 1}", callback_data=f"all_ads?page={page - 1}"
+                text=f"⬅️ Стр. {page - 1}",
+                callback_data=f"all_ads_admin?page={page - 1}",
             )
         )
 
@@ -941,7 +959,8 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     if page < total_pages:
         nav_buttons.append(
             InlineKeyboardButton(
-                text=f"Стр. {page + 1} ➡️", callback_data=f"all_ads?page={page + 1}"
+                text=f"Стр. {page + 1} ➡️",
+                callback_data=f"all_ads_admin?page={page + 1}",
             )
         )
 
@@ -965,46 +984,50 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     # Отправляем новые объявления и собираем их ID
     new_msg_ids = []
     for product in products:
-        first_photo = product.photos[0].photo_url if product.photos else None
-        views = views_counts.get(product.id, 0)
-        caption = (
-            f"<b>#{product.id} — {product.name}</b>\n\n"
-            f"{product.description}\n\n"
-            f"<b>Цена:</b> {product.price if product.price is not None else 'Не указана'}\n"
-            f"<b>Контакт:</b> {product.contact}\n"
-            f"<b>Дата:</b> {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-            f"<b>Просмотры:</b> {views}\n"
-        )
-
-        buttons = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="📷 Показать фото",
-                        callback_data=f"show_photos_pub:{product.id}",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="🛑 Снять с публикации",
-                        callback_data=f"unpublish:{product.id}",
-                    )
-                ],
-                [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")],
-            ]
-        )
-
-        if first_photo:
-            sent_msg = await callback.message.answer_photo(
-                first_photo, caption=caption, parse_mode="HTML", reply_markup=buttons
-            )
-        else:
-            sent_msg = await callback.message.answer(
-                caption, parse_mode="HTML", reply_markup=buttons
+        try:
+            first_photo = product.photos[0].photo_url if product.photos else None
+            views = views_counts.get(product.id, 0)
+            caption = (
+                f"<b>#{product.id} — {product.name}</b>\n\n"
+                f"{product.description}\n\n"
+                f"<b>Цена:</b> {product.price if product.price is not None else 'Не указана'}\n"
+                f"<b>Контакт:</b> {product.contact}\n"
+                f"<b>Дата:</b> {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+                f"<b>Просмотры:</b> {views}\n"
             )
 
-        new_msg_ids.append(sent_msg.message_id)
+            buttons = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="📷 Показать фото",
+                            callback_data=f"show_photos_pub:{product.id}",
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🛑 Снять с публикации",
+                            callback_data=f"unpublish:{product.id}",
+                        )
+                    ],
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")],
+                ]
+            )
+            if first_photo:
+                sent_msg = await callback.message.answer_photo(
+                    first_photo,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=buttons,
+                )
+            else:
+                sent_msg = await callback.message.answer(
+                    caption, parse_mode="HTML", reply_markup=buttons
+                )
 
+            new_msg_ids.append(sent_msg.message_id)
+        except TelegramBadRequest as e:
+            print(e)
     # Сохраняем ID новых сообщений в состоянии
     await state.update_data(ads_msg_ids=new_msg_ids)
 

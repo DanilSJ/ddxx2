@@ -65,6 +65,32 @@ def contains_profanity(text: str) -> bool:
     return False
 
 
+@router.message(Command("post"))
+async def cmd_post(message: Message, state: FSMContext):
+    logger.info("/post requested by user_id=%s", message.from_user.id)
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
+    await button_post(message=message, state=state)
+
+
+@router.message(F.text == "📢 Разместить объявление")
+async def button_post(message: Message, state: FSMContext):
+    logger.info("User_id=%s started posting flow", message.from_user.id)
+    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+    if not allowed:
+        await message.answer(
+            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
+        )
+        return
+    await state.clear()
+    await state.set_state(Post.categories)
+    await send_category_page(message, state, page=1)
+
+
 async def send_category_page(message_or_callback, state: FSMContext, page: int):
     async with db_helper.session_factory() as session:
         categories = await get_categories_page(session, page=page)
@@ -98,32 +124,6 @@ async def send_category_page(message_or_callback, state: FSMContext, page: int):
             await message_or_callback.answer(text, reply_markup=keyboard)
         else:
             await message_or_callback.message.edit_text(text, reply_markup=keyboard)
-
-
-@router.message(Command("post"))
-async def cmd_post(message: Message, state: FSMContext):
-    logger.info("/post requested by user_id=%s", message.from_user.id)
-    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
-    if not allowed:
-        await message.answer(
-            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
-        )
-        return
-    await button_post(message=message, state=state)
-
-
-@router.message(F.text == "📢 Разместить объявление")
-async def button_post(message: Message, state: FSMContext):
-    logger.info("User_id=%s started posting flow", message.from_user.id)
-    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
-    if not allowed:
-        await message.answer(
-            f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
-        )
-        return
-    await state.clear()
-    await state.set_state(Post.categories)
-    await send_category_page(message, state, page=1)
 
 
 @router.callback_query(F.data.startswith("page:"))
