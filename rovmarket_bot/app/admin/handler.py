@@ -792,13 +792,16 @@ async def approve_ad(callback: CallbackQuery):
     )
 
     # Если кто-то заблокировал — отправляем списком
-    if blocked_users:
-        text = "🚫 Заблокировали бота:\n" + "\n".join(blocked_users)
+    try:
+        if blocked_users:
+            text = "🚫 Заблокировали бота:\n" + "\n".join(blocked_users)
 
-        # Разбиваем на части, если текст слишком длинный
-        chunk_size = 4000  # чуть меньше лимита
-        for i in range(0, len(text), chunk_size):
-            await callback.message.answer(text[i : i + chunk_size])
+            # Разбиваем на части, если текст слишком длинный
+            chunk_size = 4000  # чуть меньше лимита
+            for i in range(0, len(text), chunk_size):
+                await callback.message.answer(text[i : i + chunk_size])
+    except Exception as e:
+        await callback.message.answer(f"ошибка показа заблокированных: {e}")
 
 
 @router.callback_query(F.data.startswith("decline:"))
