@@ -89,10 +89,16 @@ async def admin_back(callback: CallbackQuery, state: FSMContext):
 async def admin_settings(callback: CallbackQuery):
     async with db_helper.session_factory() as session:
         settings_row = await get_or_create_bot_settings(session)
+
     kb = build_admin_settings_keyboard(
         moderation=bool(settings_row.moderation),
         logging=bool(settings_row.logging),
+        notifications_all=(
+            settings_row.notifications_all is None
+            or settings_row.notifications_all is True
+        ),
     )
+
     await callback.message.edit_text("⚙️ Настройки бота", reply_markup=kb)
     await callback.answer()
 
@@ -102,9 +108,15 @@ async def toggle_moderation_handler(callback: CallbackQuery):
     async with db_helper.session_factory() as session:
         current = (await get_or_create_bot_settings(session)).moderation
         updated = await update_bot_settings(session, moderation=not bool(current))
+
     kb = build_admin_settings_keyboard(
-        moderation=bool(updated.moderation), logging=bool(updated.logging)
+        moderation=bool(updated.moderation),
+        logging=bool(updated.logging),
+        notifications_all=(
+            updated.notifications_all is None or updated.notifications_all is True
+        ),
     )
+
     await callback.message.edit_text("⚙️ Настройки бота", reply_markup=kb)
     await callback.answer(
         "Модерация: включена" if updated.moderation else "Модерация: выключена"
@@ -116,12 +128,43 @@ async def toggle_logging_handler(callback: CallbackQuery):
     async with db_helper.session_factory() as session:
         current = (await get_or_create_bot_settings(session)).logging
         updated = await update_bot_settings(session, logging=not bool(current))
+
     kb = build_admin_settings_keyboard(
-        moderation=bool(updated.moderation), logging=bool(updated.logging)
+        moderation=bool(updated.moderation),
+        logging=bool(updated.logging),
+        notifications_all=(
+            updated.notifications_all is None or updated.notifications_all is True
+        ),
     )
+
     await callback.message.edit_text("⚙️ Настройки бота", reply_markup=kb)
     await callback.answer(
         "Логирование: включено" if updated.logging else "Логирование: выключено"
+    )
+
+
+@router.callback_query(F.data == "toggle_notifications")
+async def toggle_notifications_handler(callback: CallbackQuery):
+    async with db_helper.session_factory() as session:
+        current = (await get_or_create_bot_settings(session)).notifications_all
+        # None и True = уведомления включены, False = выключены
+        new_value = not (current is None or current is True)
+        updated = await update_bot_settings(session, notifications_all=new_value)
+
+    new_notifications_state = (
+        updated.notifications_all is None or updated.notifications_all is True
+    )
+
+    kb = build_admin_settings_keyboard(
+        moderation=bool(updated.moderation),
+        logging=bool(updated.logging),
+        notifications_all=new_notifications_state,
+    )
+
+    # Меняем сообщение только если изменилось состояние
+    await callback.message.edit_text("⚙️ Настройки бота", reply_markup=kb)
+    await callback.answer(
+        "Уведомления: включены" if new_notifications_state else "Уведомления: выключены"
     )
 
 

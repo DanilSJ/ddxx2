@@ -43,9 +43,13 @@ menu_back = InlineKeyboardMarkup(
 )
 
 
-def build_admin_settings_keyboard(*, moderation: bool, logging: bool) -> InlineKeyboardMarkup:
+def build_admin_settings_keyboard(
+    *, moderation: bool, logging: bool, notifications_all: bool
+) -> InlineKeyboardMarkup:
     mod_status = "✅" if moderation else "❌"
     log_status = "✅" if logging else "❌"
+    notifications_status = "✅" if notifications_all else "❌"
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -56,6 +60,12 @@ def build_admin_settings_keyboard(*, moderation: bool, logging: bool) -> InlineK
             [
                 InlineKeyboardButton(
                     text=f"📝 Логирование: {log_status}", callback_data="toggle_logging"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"🔔 Уведомления: {notifications_status}",
+                    callback_data="toggle_notifications",
                 )
             ],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")],

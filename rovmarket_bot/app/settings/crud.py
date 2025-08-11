@@ -73,6 +73,7 @@ async def toggle_category_subscription(
 
 # ----- Bot settings (singleton) -----
 
+
 async def get_or_create_bot_settings(session: AsyncSession) -> BotSettings:
     result = await session.execute(
         select(BotSettings).where(BotSettings.singleton_key == 1)
@@ -90,6 +91,7 @@ async def update_bot_settings(
     session: AsyncSession,
     moderation: bool | None = None,
     logging: bool | None = None,
+    notifications_all: bool | None = None,
 ) -> BotSettings:
     settings_row = await get_or_create_bot_settings(session)
 
@@ -98,6 +100,8 @@ async def update_bot_settings(
         values["moderation"] = moderation
     if logging is not None:
         values["logging"] = logging
+    if notifications_all is not None:
+        values["notifications_all"] = notifications_all  # ✅ добавили
 
     if values:
         await session.execute(
@@ -107,6 +111,7 @@ async def update_bot_settings(
         )
         await session.commit()
         await session.refresh(settings_row)
+
         # Apply logging changes immediately without restart
         if "logging" in values:
             try:
@@ -114,4 +119,5 @@ async def update_bot_settings(
             except Exception:
                 # Do not break settings update flow if logger reconfig fails
                 pass
+
     return settings_row
