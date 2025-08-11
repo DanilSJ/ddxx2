@@ -190,13 +190,11 @@ async def process_categories(message: Message, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def process_name(message: Message, state: FSMContext):
-    # if contains_profanity(message.text):
-    #     logger.warning("Profanity detected in name by user_id=%s", message.from_user.id)
-    #     await message.answer(
-    #         "🚫 В названии обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
-    #     )
-    #     return
-
+    if len(message.text) > 85:
+        await message.answer(
+            f"⚠️ Название слишком длинное (максимум 85 символов). Сейчас: {len(message.text)}."
+        )
+        return
     await state.update_data(name=message.text)
     await message.answer("📝 Теперь введите *описание* вашего объявления:")
     await state.set_state(Post.description)
@@ -217,16 +215,27 @@ async def process_name(message: Message, state: FSMContext):
     F.text != "📢 Разместить объявление",
     F.text != "🔍 Найти объявление",
 )
+@router.message(
+    Post.description,
+    ~F.text.startswith("/"),
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def process_description(message: Message, state: FSMContext):
-    # if contains_profanity(message.text):
-    #     logger.warning(
-    #         "Profanity detected in description by user_id=%s", message.from_user.id
-    #     )
-    #     await message.answer(
-    #         "🚫 В описании обнаружены запрещённые слова. Пожалуйста, перепишите без мата."
-    #     )
-    #     return
-
+    if len(message.text) > 750:
+        await message.answer(
+            f"⚠️ Описание слишком длинное (максимум 750 символов). Сейчас: {len(message.text)}."
+        )
+        return
     await state.update_data(description=message.text)
     await message.answer(
         "📸 Пришлите *до 10 фотографий* для вашего объявления.\n\n"
@@ -380,9 +389,18 @@ async def process_price(message: Message, state: FSMContext):
             )
             return
 
-        number_part = int(match.group(1))
+        number_part = match.group(1)
         k_multiplier = 1000 ** len(match.group(2))
-        price = number_part * k_multiplier
+
+        # 🔹 Проверка длины числа
+        if len(number_part) > 12:
+            await message.answer(
+                f"❌ Цена слишком большая. Максимум 12 цифр.\n"
+                f"Сейчас: {len(number_part)} цифр."
+            )
+            return
+
+        price = int(number_part) * k_multiplier
 
     await state.update_data(price=price)
 
@@ -397,7 +415,7 @@ async def process_price(message: Message, state: FSMContext):
     await state.set_state(Post.contact)
 
 
-@router.callback_query(lambda c: c.data == "price_negotiable")
+@router.callback_query(F.data == "price_negotiable")
 async def price_negotiable_callback(callback: CallbackQuery, state: FSMContext):
     await state.update_data(price="Договорная цена")
     await callback.message.edit_reply_markup()
