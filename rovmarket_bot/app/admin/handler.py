@@ -811,7 +811,7 @@ async def decline_ad(callback: CallbackQuery):
             await callback.answer("Объявление не найдено", show_alert=True)
             return
 
-        if not product.publication:
+        if product.publication is False:
             await callback.answer("Объявление уже отклонено", show_alert=True)
             return
 
