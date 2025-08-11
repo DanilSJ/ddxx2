@@ -1,6 +1,8 @@
 from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
 )
 
 menu_start = ReplyKeyboardMarkup(
@@ -20,4 +22,19 @@ menu_start = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True,
     one_time_keyboard=True,
+)
+
+menu_start_inline = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Все объявления", callback_data="menu_start_inline_all_ads"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Создать объявление", callback_data="menu_start_inline_post_ads"
+            )
+        ],
+    ]
 )
