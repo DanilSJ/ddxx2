@@ -20,7 +20,6 @@ menu_search = ReplyKeyboardMarkup(
         ],
     ],
     resize_keyboard=True,
-    one_time_keyboard=True,
 )
 
 pagination_keyboard = ReplyKeyboardMarkup(
