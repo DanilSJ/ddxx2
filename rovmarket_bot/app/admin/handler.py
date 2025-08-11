@@ -670,7 +670,6 @@ async def approve_ad(callback: CallbackQuery):
         product.publication = True
         await session.commit()
 
-        # Проверяем настройки сервера
         settings_stmt = select(BotSettings).limit(1)
         settings_result = await session.execute(settings_stmt)
         settings = settings_result.scalar_one_or_none()
@@ -682,7 +681,6 @@ async def approve_ad(callback: CallbackQuery):
             )
             return
 
-        # Получаем всех пользователей, подписанных на все объявления
         users_stmt = select(User).where(
             or_(
                 User.notifications_all_ads == True, User.notifications_all_ads.is_(None)
@@ -694,9 +692,6 @@ async def approve_ad(callback: CallbackQuery):
     await invalidate_cache_on_new_ad()
     await index_product_in_redis(product)
 
-    # Формируем текст рассылки
-
-    # Контакт
     contact = product.contact.strip() if product.contact else ""
     if (
         re.fullmatch(r"\d{6,}", contact)
@@ -732,10 +727,11 @@ async def approve_ad(callback: CallbackQuery):
         f"🕒 Дата создания: {created_str}"
     )
 
-    # Берём первые 10 фото, если есть
     photos = [p.photo_url for p in product.photos][:10]
 
-    # Рассылаем всем подписчикам, кроме автора
+    success_count = 0
+    blocked_count = 0
+
     for user in subscribed_users:
         try:
             if not photos:
@@ -757,10 +753,18 @@ async def approve_ad(callback: CallbackQuery):
                 ]
                 media_group += [InputMediaPhoto(media=photo) for photo in photos[1:]]
                 await callback.bot.send_media_group(user.telegram_id, media_group)
-        except Exception as e:
-            print(e)
 
-    await callback.answer("Объявление принято ✅", show_alert=True)
+            success_count += 1
+
+        except Exception as e:
+            blocked_count += 1
+
+    await callback.answer(
+        f"Объявление принято ✅\n"
+        f"Отправлено успешно: {success_count}\n"
+        f"Не удалось отправить (заблокировали бота или ошибка): {blocked_count}",
+        show_alert=True,
+    )
 
 
 @router.callback_query(F.data.startswith("decline:"))
