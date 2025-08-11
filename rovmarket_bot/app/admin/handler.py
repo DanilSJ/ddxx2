@@ -15,7 +15,7 @@ from aiogram.types import (
 )
 from sqlalchemy import or_
 
-from rovmarket_bot.core.models import db_helper
+from rovmarket_bot.core.models import db_helper, BotSettings
 from .crud import *
 from .keyboard import menu_admin, menu_stats, menu_back, build_admin_settings_keyboard
 from rovmarket_bot.app.settings.crud import (
@@ -669,6 +669,18 @@ async def approve_ad(callback: CallbackQuery):
 
         product.publication = True
         await session.commit()
+
+        # Проверяем настройки сервера
+        settings_stmt = select(BotSettings).limit(1)
+        settings_result = await session.execute(settings_stmt)
+        settings = settings_result.scalar_one_or_none()
+
+        if not settings or not settings.notifications_all:
+            await callback.answer(
+                "Объявление опубликовано, но уведомления о новом объявлении пользователям отключены",
+                show_alert=True,
+            )
+            return
 
         # Получаем всех пользователей, подписанных на все объявления
         users_stmt = select(User).where(
