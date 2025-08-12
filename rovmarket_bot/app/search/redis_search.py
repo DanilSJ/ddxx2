@@ -29,9 +29,6 @@ async def search_in_redis(text: str, session: AsyncSession, limit: int = 10):
     return await search_in_redis_original(text, session, limit)
 
 
-from re import findall
-
-
 async def search_in_redis_original(text: str, session: AsyncSession, limit: int = 10):
     try:
         logger.info("RedisSearch query: %s", text)
@@ -83,9 +80,11 @@ async def search_in_redis_original(text: str, session: AsyncSession, limit: int 
 
         if not product_ids:
             logger.info("No product_ids from Redis. Attempting to restore index data.")
+
             await invalidate_all_ads_cache()
             await restore_redis_data(session)
-            return await search_in_redis_original(text, session, limit)
+
+            # return await search_in_redis_original(text, session, limit)
 
         publication_map = await get_publication_for_products(product_ids, session)
         filtered_product_ids = [pid for pid in product_ids if publication_map.get(pid)]
@@ -143,14 +142,16 @@ async def index_product_in_redis(product):
 
 
 async def restore_redis_data(session: AsyncSession):
-    # Получаем все опубликованные продукты из БД
     stmt = select(Product).where(Product.publication == True)
     result = await session.execute(stmt)
     products = result.unique().scalars().all()
 
+    if not products:
+        logger.info("No published products found in DB for restore.")
+        return
+
     for product in products:
         key = f"product:{product.id}"
-        # Записываем в Redis Hash
         await redis.hset(
             key,
             mapping={
@@ -159,7 +160,6 @@ async def restore_redis_data(session: AsyncSession):
                 "price": str(product.price) if product.price else "0",
             },
         )
-    # После этого RedisSearch должен индексировать эти хеши автоматически
 
 
 async def ensure_redis_index():
