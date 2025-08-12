@@ -31,3 +31,32 @@ menu_skip = ReplyKeyboardMarkup(
         ]
     ],
 )
+
+menu_back = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="Назад"),
+        ]
+    ],
+    resize_keyboard=True,
+)
+
+menu_skip_back = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="Пропустить"),
+            KeyboardButton(text="Назад"),
+        ]
+    ],
+    resize_keyboard=True,
+)
+menu_skip_back_contact = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="📱 Отправить номер телефона", request_contact=True)],
+        [
+            KeyboardButton(text="Пропустить"),
+            KeyboardButton(text="Назад"),
+        ],
+    ],
+    resize_keyboard=True,
+)

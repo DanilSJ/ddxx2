@@ -10,15 +10,20 @@ from aiogram.types import (
 from html import escape
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from sqlalchemy import select
 
 from rovmarket_bot.app.ads.keyboard import (
     contact,
     menu_price_negotiable_edit,
     menu_skip,
+    menu_back,
+    menu_skip_back,
+    menu_skip_back_contact,  # добавлен импорт
 )
+from rovmarket_bot.app.post.crud import get_categories_page
 from rovmarket_bot.app.start.keyboard import menu_start
 from rovmarket_bot.core.cache import check_rate_limit, invalidate_all_ads_cache
-from rovmarket_bot.core.models import db_helper
+from rovmarket_bot.core.models import db_helper, Categories
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from rovmarket_bot.app.ads.crud import (
     get_user_products_paginated,
@@ -49,6 +54,7 @@ class EditProductState(StatesGroup):
     waiting_description = State()
     waiting_price = State()
     waiting_contact = State()
+    waiting_category = State()
 
 
 CONTACT_REGEX = r"^(?:\+7\d{10}|\+380\d{9}|\+8\d{10}|@[\w\d_]{5,32}|[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)$"
@@ -580,7 +586,7 @@ async def start_edit_product(callback: CallbackQuery, state: FSMContext):
     await state.update_data(edit_product_id=product_id)
     await callback.message.answer(
         "✏️ Введите **новое название** для вашего объявления или нажмите кнопку «Пропустить», чтобы оставить без изменений:",
-        reply_markup=menu_skip,
+        reply_markup=menu_skip_back,
     )
     await state.set_state(EditProductState.waiting_name)
     await callback.answer()
@@ -593,20 +599,36 @@ async def edit_name(message: Message, state: FSMContext):
         await state.update_data(new_name=None)
     else:
         await state.update_data(new_name=message.text)
+    if len(message.text) > 85:
+        await message.answer(
+            f"⚠️ Название слишком длинное (максимум 85 символов). Сейчас: {len(message.text)}."
+        )
+        return
     await message.answer(
         "✏️ Введите **новое описание** для вашего объявления или нажмите кнопку «Пропустить», чтобы оставить без изменений:",
-        reply_markup=menu_skip,
+        reply_markup=menu_skip_back,
     )
     await state.set_state(EditProductState.waiting_description)
 
 
 @router.message(EditProductState.waiting_description)
 async def edit_description(message: Message, state: FSMContext):
+    if message.text == "Назад":
+        await message.answer(
+            "✏️ Введите **новое название** для вашего объявления или нажмите кнопку «Пропустить», чтобы оставить без изменений:",
+            reply_markup=menu_skip_back,
+        )
+        await state.set_state(EditProductState.waiting_name)
+        return
     if message.text == "Пропустить":
         await state.update_data(new_description=None)
     else:
         await state.update_data(new_description=message.text)
-
+    if len(message.text) > 750:
+        await message.answer(
+            f"⚠️ Описание слишком длинное (максимум 750 символов). Сейчас: {len(message.text)}."
+        )
+        return
     await message.answer(
         "💰 Введите **новую цену** (только цифры) или нажмите кнопку «Договорная» ниже.\n"
         "Также вы можете нажать кнопку «Пропустить», чтобы оставить цену без изменений:",
@@ -614,7 +636,7 @@ async def edit_description(message: Message, state: FSMContext):
     )
     await message.answer(
         "Можете пропустить цену",
-        reply_markup=menu_skip,
+        reply_markup=menu_skip_back,
     )
     await state.set_state(EditProductState.waiting_price)
 
@@ -623,6 +645,13 @@ async def edit_description(message: Message, state: FSMContext):
 async def edit_price(message: Message, state: FSMContext):
     if message.text == "Пропустить":
         await state.update_data(new_price=None)
+    elif message.text == "Назад":
+        await message.answer(
+            "✏️ Введите **новое описание** для вашего объявления или нажмите кнопку «Пропустить», чтобы оставить без изменений:",
+            reply_markup=menu_skip_back,
+        )
+        await state.set_state(EditProductState.waiting_description)
+        return
     else:
         price_text = message.text.strip().lower()
         if price_text == "договорная":
@@ -639,25 +668,124 @@ async def edit_price(message: Message, state: FSMContext):
                     "или нажмите кнопку «💬 Договорная» или «Пропустить»."
                 )
                 return
-            number_part = int(match.group(1))
+
+            number_part = match.group(1)
+            if len(number_part) > 12:
+                await message.answer(
+                    f"❌ Цена слишком большая. Максимум 12 цифр.\n"
+                    f"Сейчас: {len(number_part)} цифр."
+                )
+                return
+
             k_multiplier = 1000 ** len(match.group(2))
-            price = number_part * k_multiplier
+            price = int(number_part) * k_multiplier
+
         await state.update_data(new_price=price)
 
-    await message.answer(
+    await send_category_page(message, state, page=1)
+    await state.set_state(EditProductState.waiting_category)
+
+
+@router.message(EditProductState.waiting_category)
+async def category_text_handler(message: Message, state: FSMContext):
+    if message.text == "Пропустить":
+        await state.update_data(new_category=None)
+        await message.answer(
+            "📞 Укажите ваши контактные данные:\n\n"
+            "— Номер телефона (начиная с `+7`, `+380` или `+8`)\n"
+            "— Email (например, `example@mail.com`)\n"
+            "— Telegram username (начиная с `@`)\n\n"
+            "Чтобы быстро поделиться номером телефона, нажмите кнопку «📱 Отправить номер телефона» ниже 👇\n"
+            "Или нажмите «Пропустить», если не хотите менять контактные данные:",
+            reply_markup=menu_skip_back_contact,
+        )
+        await state.set_state(EditProductState.waiting_contact)
+        return
+    elif message.text == "Назад":
+        await message.answer(
+            "💰 Введите **новую цену** (только цифры) или нажмите кнопку «Договорная» ниже.\n"
+            "Также вы можете нажать кнопку «Пропустить», чтобы оставить цену без изменений:",
+            reply_markup=menu_price_negotiable_edit,
+        )
+        await message.answer(
+            "Можете пропустить цену",
+            reply_markup=menu_skip_back,
+        )
+        await state.set_state(EditProductState.waiting_price)
+        return
+    else:
+        await message.answer(
+            "Пожалуйста, выберите категорию с помощью кнопок ниже или используйте 'Пропустить'/'Назад'."
+        )
+
+
+async def send_category_page(message_or_callback, state: FSMContext, page: int):
+    async with db_helper.session_factory() as session:
+        categories = await get_categories_page(session, page=page)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+
+        for cat in categories:
+            keyboard.inline_keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        text=cat.name, callback_data=f"select_category_edit:{cat.name}"
+                    )
+                ]
+            )
+
+        # Добавляем кнопки "назад" и "вперед"
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="⬅️ Назад", callback_data=f"page_edit:{page-1}"
+                )
+            )
+        if len(categories) == 10:  # возможно есть еще страницы
+            nav_buttons.append(
+                InlineKeyboardButton(
+                    text="➡️ Далее", callback_data=f"page_edit:{page+1}"
+                )
+            )
+
+        if nav_buttons:
+            keyboard.inline_keyboard.append(nav_buttons)
+
+        text = "📂 Выберите категорию для вашего объявления:"
+        if isinstance(message_or_callback, Message):
+            await message_or_callback.answer(text, reply_markup=keyboard)
+            await message_or_callback.answer(
+                "Вы также можете пропустить или вернуться назад:",
+                reply_markup=menu_skip_back,
+            )
+        else:
+            await message_or_callback.message.edit_text(text, reply_markup=keyboard)
+
+
+@router.callback_query(F.data.startswith("select_category_edit:"))
+async def category_selected(callback: CallbackQuery, state: FSMContext):
+    category_name = callback.data.split(":")[1]
+    await state.update_data(new_category=category_name)
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer(f"✅ Категория выбрана: {category_name}")
+
+    await callback.message.answer(
         "📞 Укажите ваши контактные данные:\n\n"
         "— Номер телефона (начиная с `+7`, `+380` или `+8`)\n"
         "— Email (например, `example@mail.com`)\n"
         "— Telegram username (начиная с `@`)\n\n"
         "Чтобы быстро поделиться номером телефона, нажмите кнопку «📱 Отправить номер телефона» ниже 👇\n"
         "Или нажмите «Пропустить», если не хотите менять контактные данные:",
-        reply_markup=contact,
-    )
-    await message.answer(
-        "Можете пропустить контакты",
-        reply_markup=menu_skip,
+        reply_markup=menu_skip_back_contact,
     )
     await state.set_state(EditProductState.waiting_contact)
+
+
+@router.callback_query(F.data.startswith("page_edit:"))
+async def paginate_categories(callback: CallbackQuery, state: FSMContext):
+    page = int(callback.data.split(":")[1])
+    await send_category_page(callback, state, page=page)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "price_negotiable_edit")
@@ -670,7 +798,7 @@ async def set_price_negotiable_edit(callback: CallbackQuery, state: FSMContext):
         "— Email (`example@mail.com`)\n"
         "— Telegram (`@username`)\n\n"
         "Или нажмите кнопку «📱 Отправить номер телефона» ниже 👇",
-        reply_markup=contact,
+        reply_markup=menu_skip_back_contact,
     )
     await state.set_state(EditProductState.waiting_contact)
     await callback.answer()
@@ -694,6 +822,10 @@ async def set_price_negotiable_edit(callback: CallbackQuery, state: FSMContext):
 async def edit_contact(message: Message, state: FSMContext):
     if message.text == "Пропустить":
         contact_value = None
+    elif message.text == "Назад":
+        await send_category_page(message, state, page=1)
+        await state.set_state(EditProductState.waiting_category)
+        return
     else:
         if message.contact:
             contact_value = message.contact.phone_number
@@ -720,6 +852,21 @@ async def edit_contact(message: Message, state: FSMContext):
     for key in ("new_name", "new_description", "new_price"):
         if user_data.get(key) is not None:
             update_kwargs[key[4:]] = user_data[key]  # убираем "new_"
+
+    # Обработка категории: ищем id по названию, если есть новая категория
+    if user_data.get("new_category") is not None:
+        category_name = user_data["new_category"]
+        async with db_helper.session_factory() as session:
+            result = await session.execute(
+                select(Categories).where(Categories.name == category_name)
+            )
+            category_obj = result.scalar_one_or_none()
+            if category_obj:
+                update_kwargs["category"] = category_obj.id
+            else:
+                await message.answer("❌ Категория не найдена.")
+                return
+
     if contact_value is not None:
         update_kwargs["contact"] = contact_value
 

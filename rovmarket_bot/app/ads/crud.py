@@ -1,3 +1,4 @@
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -189,9 +190,15 @@ async def update_user_product(
     if not product:
         return None
 
+    # Получаем список обычных столбцов (без relationships)
+    mapper = inspect(Product)
+    column_keys = set(c.key for c in mapper.attrs if hasattr(c, "columns"))
+
     for field, value in kwargs.items():
-        if hasattr(product, field):
+        if field in column_keys:
             setattr(product, field, value)
+        elif field == "category":
+            setattr(product, "category_id", value)
 
     await session.commit()
     await session.refresh(product)
