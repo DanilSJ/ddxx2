@@ -233,6 +233,7 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                 f"Страница {page+1} из {((total-1)//PAGE_SIZE)+1}",
                 reply_markup=pagination_keyboard,
             )
+            await message.answer("Используйте кнопки для перелистывания страниц ⬅️➡️")
         else:
             await show_ads_page(message, state, 0)
             logger.info(
@@ -696,9 +697,15 @@ async def show_products_by_category(
             await message_or_callback.answer(
                 info_text, reply_markup=pagination_keyboard
             )
+            await message_or_callback.answer(
+                "Используйте кнопки для перелистывания страниц ⬅️➡️"
+            )
         else:
             await message_or_callback.message.answer(
                 info_text, reply_markup=pagination_keyboard
+            )
+            await message_or_callback.message.answer(
+                "Используйте кнопки для перелистывания страниц ⬅️➡️"
             )
 
 
@@ -798,9 +805,15 @@ async def show_products_by_category_filtered(
 
         if isinstance(message_or_callback, Message):
             await message_or_callback.answer(info_text, reply_markup=pagination_kb)
+            await message_or_callback.answer(
+                "Используйте кнопки для перелистывания страниц ⬅️➡️"
+            )
         else:
             await message_or_callback.message.answer(
                 info_text, reply_markup=pagination_kb
+            )
+            await message_or_callback.message.answer(
+                "Используйте кнопки для перелистывания страниц ⬅️➡️"
             )
 
 
