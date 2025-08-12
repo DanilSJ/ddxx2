@@ -108,16 +108,20 @@ async def button_my_ads(message: Message, state: FSMContext):
     await state.set_state(UserAdsState.viewing_ads)
 
     # Отправляем объявления
-    await send_user_products(message, products, 1, total_count)
+    await send_user_products(message, products, 1, total_count, state)
 
 
 async def send_user_products(
-    message: Message, products, current_page: int, total_count: int
+    message: Message, products, current_page: int, total_count: int, state: FSMContext
 ):
     """Отправить объявления пользователя с пагинацией"""
 
+    sent_messages = []
+
+    data = await state.get_data()
+    ads_message_ids = data.get("ads_message_ids", [])
+
     for product in products:
-        # Формируем красивое описание объявления (HTML)
         name = escape(product.name or "")
         description = escape(product.description or "")
         category_name = escape(getattr(product.category, "name", "—") or "—")
@@ -140,7 +144,6 @@ async def send_user_products(
             f"👥 <b>Просмотры:</b> {views_count}"
         )
 
-        # Отправляем единое сообщение с кнопками действий
         actions_keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -173,24 +176,32 @@ async def send_user_products(
         if product.photos:
             first_photo_url = product.photos[0].photo_url
             try:
-                await message.answer_photo(
+                sent_message = await message.answer_photo(
                     photo=first_photo_url,
                     caption=caption,
                     reply_markup=actions_keyboard,
                     parse_mode="HTML",
                 )
             except TelegramBadRequest:
-                await message.answer(
+                sent_message = await message.answer(
                     caption, reply_markup=actions_keyboard, parse_mode="HTML"
                 )
         else:
-            await message.answer(
+            sent_message = await message.answer(
                 caption, reply_markup=actions_keyboard, parse_mode="HTML"
             )
 
-    # Создаем клавиатуру для навигации
+        ads_message_ids.append(sent_message.message_id)
+
+    # Клавиатура для навигации
     keyboard = create_pagination_keyboard(current_page, total_count)
-    await message.answer("Навигация по объявлениям:", reply_markup=keyboard)
+    nav_message = await message.answer(
+        "Навигация по объявлениям:", reply_markup=keyboard
+    )
+    ads_message_ids.append(nav_message.message_id)
+
+    # Обновляем список ID в состоянии
+    await state.update_data(ads_message_ids=ads_message_ids)
 
 
 def create_pagination_keyboard(
@@ -262,16 +273,23 @@ async def handle_ads_pagination(callback: CallbackQuery, state: FSMContext):
     await callback.message.delete()
 
     # Отправляем новые объявления
-    await send_user_products(callback.message, products, page, total_count)
+    await send_user_products(callback.message, products, page, total_count, state)
     await callback.answer()
 
 
 @router.callback_query(F.data == "close_ads")
 async def close_ads_view(callback: CallbackQuery, state: FSMContext):
-    """Закрыть просмотр объявлений"""
+    data = await state.get_data()
+    ads_message_ids = data.get("ads_message_ids", [])
+
+    for msg_id in ads_message_ids:
+        try:
+            await callback.message.chat.delete_message(msg_id)
+        except Exception:
+            pass  # Если сообщение уже удалено или ошибка - игнорируем
+
     await state.clear()
-    await callback.message.delete()
-    await callback.message.answer("Просмотр объявлений закрыт", reply_markup=menu_start)
+    await callback.message.answer("Просмотр объявлений закрыт")
 
 
 @router.callback_query(F.data == "current_page")
@@ -280,36 +298,56 @@ async def current_page_info(callback: CallbackQuery):
     await callback.answer("Текущая страница")
 
 
+# Первый шаг — запрос подтверждения
 @router.callback_query(F.data.startswith("unpublish_"))
-async def unpublish_product(callback: CallbackQuery):
-    """Снять объявление с публикации (publication=False)."""
+async def ask_unpublish_confirmation(callback: CallbackQuery):
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
-        logger.warning(
-            "Unpublish: invalid product id in callback data=%s", callback.data
-        )
+        await callback.answer("Некорректный запрос", show_alert=False)
+        return
+
+    confirm_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Да, снять", callback_data=f"confirm_unpublish_{product_id}"
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отмена", callback_data="cancel_unpublish"
+                ),
+            ]
+        ]
+    )
+
+    await callback.message.answer(
+        f"Вы уверены, что хотите снять объявление №{product_id} с публикации?",
+        reply_markup=confirm_keyboard,
+    )
+    await callback.answer()
+
+
+# Второй шаг — подтверждение
+@router.callback_query(F.data.startswith("confirm_unpublish_"))
+async def unpublish_product(callback: CallbackQuery):
+    try:
+        product_id = int(callback.data.split("_")[-1])
+    except ValueError:
         await callback.answer("Некорректный запрос", show_alert=False)
         return
 
     async with db_helper.session_factory() as session:
-        # Проверяем текущее состояние публикации
         current_product = await get_user_product_with_photos(
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
 
-        if current_product is None:
-            logger.warning(
-                "Unpublish failed: product not found or not owned. product_id=%s user_id=%s",
-                product_id,
-                callback.from_user.id,
-            )
-            await callback.message.answer("Не удалось снять с публикации")
+        if not current_product:
+            await callback.message.edit_text("Не удалось снять с публикации")
             await callback.answer()
             return
 
         if current_product.publication is False:
-            await callback.message.answer("Объявление уже снято с публикации")
+            await callback.message.edit_text("Объявление уже снято")
             await callback.answer()
             return
 
@@ -318,25 +356,52 @@ async def unpublish_product(callback: CallbackQuery):
         )
 
     if updated:
-        logger.info(
-            "Unpublished product_id=%s by user_id=%s", product_id, callback.from_user.id
-        )
-        await callback.message.answer("Объявление снято с публикации ✅")
-        await callback.answer()
+        await callback.message.edit_text("Объявление снято с публикации ✅")
         await invalidate_all_ads_cache()
     else:
-        logger.warning(
-            "Unpublish failed (not owner or already unpublished): product_id=%s user_id=%s",
-            product_id,
-            callback.from_user.id,
-        )
-        await callback.message.answer("Не удалось снять с публикации")
-        await callback.answer()
+        await callback.message.edit_text("Не удалось снять с публикации")
+
+    await callback.answer()
 
 
+# Отмена
+@router.callback_query(F.data == "cancel_unpublish")
+async def cancel_unpublish(callback: CallbackQuery):
+    await callback.answer("Действие отменено", show_alert=False)
+    await callback.message.edit_text("Снятие с публикации отменено ❌")
+
+
+# 1. Спрашиваем подтверждение публикации
 @router.callback_query(F.data.startswith("publish_"))
+async def ask_publish_confirmation(callback: CallbackQuery):
+    try:
+        product_id = int(callback.data.split("_")[-1])
+    except ValueError:
+        await callback.answer("Некорректный запрос", show_alert=False)
+        return
+
+    confirm_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Да, опубликовать",
+                    callback_data=f"confirm_publish_{product_id}",
+                ),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_publish"),
+            ]
+        ]
+    )
+
+    await callback.message.answer(
+        f"Вы уверены, что хотите опубликовать объявление №{product_id}?",
+        reply_markup=confirm_keyboard,
+    )
+    await callback.answer()
+
+
+# 2. Публикуем после подтверждения
+@router.callback_query(F.data.startswith("confirm_publish_"))
 async def publish_product(callback: CallbackQuery):
-    """Опубликовать объявление с учётом настроек модерации."""
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
@@ -345,21 +410,17 @@ async def publish_product(callback: CallbackQuery):
         return
 
     async with db_helper.session_factory() as session:
-        # Предварительно проверяем текущее состояние
         current_product = await get_user_product_with_photos(
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
         if current_product is None:
-            logger.warning(
-                "Publish failed: product not found or not owned. product_id=%s user_id=%s",
-                product_id,
-                callback.from_user.id,
+            await callback.message.edit_text(
+                "Не удалось опубликовать", show_alert=False
             )
-            await callback.answer("Не удалось опубликовать", show_alert=False)
             return
 
         if current_product.publication is True:
-            await callback.message.answer("Объявление уже находится в публикации")
+            await callback.message.edit_text("Объявление уже опубликовано")
             await callback.answer()
             return
 
@@ -367,15 +428,11 @@ async def publish_product(callback: CallbackQuery):
             product_id=product_id, telegram_id=callback.from_user.id, session=session
         )
         if product is None:
-            logger.warning(
-                "Publish failed after pre-check: product not found or not owned. product_id=%s user_id=%s",
-                product_id,
-                callback.from_user.id,
+            await callback.message.edit_text(
+                "Не удалось опубликовать", show_alert=False
             )
-            await callback.answer("Не удалось опубликовать", show_alert=False)
             return
 
-        # Отправляем уведомления админам только если модерация включена (publication=None)
         settings_row = await get_or_create_bot_settings(session)
         if bool(settings_row.moderation) and product.publication is None:
             admins = await get_admin_users(session)
@@ -393,21 +450,24 @@ async def publish_product(callback: CallbackQuery):
                     )
                 except Exception:
                     logger.warning(
-                        "Failed to notify admin telegram_id=%s about moderation",
-                        admin.telegram_id,
+                        "Failed to notify admin telegram_id=%s", admin.telegram_id
                     )
 
-    # Сообщение пользователю в чат
     if product.publication is True:
-        logger.info("Product published immediately product_id=%s", product.id)
-        await callback.message.answer("Объявление опубликовано сразу ✅")
+        await callback.message.edit_text("Объявление опубликовано сразу ✅")
     elif product.publication is None:
-        logger.info("Product sent to moderation product_id=%s", product.id)
-        await callback.message.answer("Объявление отправлено на модерацию ⏳")
+        await callback.message.edit_text("Объявление отправлено на модерацию ⏳")
     else:
-        logger.info("Product publication status updated product_id=%s", product.id)
-        await callback.message.answer("Статус объявления обновлён")
+        await callback.message.edit_text("Статус объявления обновлён")
+
     await callback.answer()
+
+
+# 3. Отмена публикации
+@router.callback_query(F.data == "cancel_publish")
+async def cancel_publish(callback: CallbackQuery):
+    await callback.answer("Действие отменено", show_alert=False)
+    await callback.message.edit_text("Публикация отменена ❌")
 
 
 @router.callback_query(F.data.startswith("show_photos_"))
