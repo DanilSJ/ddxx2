@@ -1,3 +1,4 @@
+import html
 import re
 from datetime import timedelta, timezone
 
@@ -794,12 +795,16 @@ async def approve_ad(callback: CallbackQuery):
     # Если кто-то заблокировал — отправляем списком
     try:
         if blocked_users:
-            text = "🚫 Заблокировали бота:\n" + "\n".join(blocked_users)
+            text = "🚫 Заблокировали бота:\n" + "\n".join(
+                html.escape(u) for u in blocked_users
+            )
 
-            # Разбиваем на части, если текст слишком длинный
-            chunk_size = 4000  # чуть меньше лимита
+            chunk_size = 4000
             for i in range(0, len(text), chunk_size):
-                await callback.message.answer(text[i : i + chunk_size])
+                await callback.message.answer(
+                    text[i : i + chunk_size], parse_mode="HTML"
+                )
+
     except Exception as e:
         await callback.message.answer(f"ошибка показа заблокированных: {e}")
 
