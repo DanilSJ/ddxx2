@@ -85,7 +85,7 @@ async def search_in_redis_original(text: str, session: AsyncSession, limit: int 
             logger.info("No product_ids from Redis. Attempting to restore index data.")
             await invalidate_all_ads_cache()
             await restore_redis_data(session)
-            return []
+            return await search_in_redis_original(text, session, limit)
 
         publication_map = await get_publication_for_products(product_ids, session)
         filtered_product_ids = [pid for pid in product_ids if publication_map.get(pid)]
