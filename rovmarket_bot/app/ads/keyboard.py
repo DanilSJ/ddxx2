@@ -22,7 +22,6 @@ contact = ReplyKeyboardMarkup(
         ]
     ],
     resize_keyboard=True,
-    one_time_keyboard=True,
 )
 
 menu_skip = ReplyKeyboardMarkup(

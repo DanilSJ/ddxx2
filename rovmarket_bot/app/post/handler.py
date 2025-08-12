@@ -485,7 +485,6 @@ async def process_contact(message: Message, state: FSMContext):
             [KeyboardButton(text="Пропустить геолокацию")],
         ],
         resize_keyboard=True,
-        one_time_keyboard=True,
     )
 
     await message.answer(
@@ -572,7 +571,6 @@ async def process_geo_text(message: Message, state: FSMContext):
             [KeyboardButton(text="Пропустить геолокацию")],
         ],
         resize_keyboard=True,
-        one_time_keyboard=True,
     )
     await message.answer(
         "⚠️ Пожалуйста, используйте кнопки ниже, чтобы отправить геолокацию или пропустить этот шаг ⬇️",
