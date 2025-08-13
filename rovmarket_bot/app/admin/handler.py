@@ -32,7 +32,8 @@ from rovmarket_bot.app.search.redis_search import index_product_in_redis
 from rovmarket_bot.core.config import bot
 
 ADS_PER_PAGE = 3
-
+MAX_CAPTION_LENGTH = 750  # ограничение для подписи
+MAX_DESCRIPTION_LENGTH = 600  # ограничение для описания
 
 router = Router()
 
@@ -593,9 +594,6 @@ async def ad_cancel(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "publication")
 async def show_publication(callback: CallbackQuery):
-    MAX_CAPTION_LENGTH = 750  # ограничение для подписи
-    MAX_DESCRIPTION_LENGTH = 600  # ограничение для описания
-
     async with db_helper.session_factory() as session:
         products = await get_unpublished_products(session)
 
@@ -609,7 +607,7 @@ async def show_publication(callback: CallbackQuery):
         caption = (
             f"<b>{product.name}</b>\n\n"
             f"{description}\n\n"
-            f"<b>Цена:</b> {product.price or 'Не указана'}\n"
+            f"<b>Цена:</b> {product.price or 'договорная'}\n"
             f"<b>Контакт:</b> {product.contact}"
         )
 
@@ -674,18 +672,52 @@ async def show_photos_admin(callback: CallbackQuery):
     await callback.answer()
 
 
+# Шаг 1 — при нажатии "Принять" отправляем подтверждение
 @router.callback_query(F.data.startswith("approve:"))
-async def approve_ad(callback: CallbackQuery):
+async def approve_ad_confirm(callback: CallbackQuery):
     product_id = int(callback.data.split(":")[1])
+    buttons = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Да", callback_data=f"approve_confirm_yes:{product_id}"
+                ),
+                InlineKeyboardButton(text="❌ Нет", callback_data="approve_confirm_no"),
+            ]
+        ]
+    )
+    await callback.message.answer(
+        "Вы уверены, что хотите опубликовать это объявление?", reply_markup=buttons
+    )
+    await callback.answer()
+
+
+# Шаг 2 — если "Да", выполняем вашу логику публикации
+@router.callback_query(F.data.startswith("approve_confirm_yes:"))
+async def approve_ad_yes(callback: CallbackQuery):
+    product_id = int(callback.data.split(":")[1])
+
+    # ВАША ЛОГИКА публикации (вынесена в отдельную функцию для переиспользования)
+    await process_approve_logic(callback, product_id)
+
+
+# Шаг 3 — если "Нет", отменяем
+@router.callback_query(F.data == "approve_confirm_no")
+async def approve_ad_no(callback: CallbackQuery):
+    await callback.message.edit_text("Публикация отменена ❌")
+
+
+# Вынесенная логика публикации (чтобы не дублировать код)
+async def process_approve_logic(callback: CallbackQuery, product_id: int):
     async with db_helper.session_factory() as session:
         product = await get_product_with_photos(session, product_id)
 
         if not product:
-            await callback.answer("Объявление не найдено", show_alert=True)
+            await callback.message.edit_text("Объявление не найдено")
             return
 
         if product.publication:
-            await callback.answer("Объявление уже опубликовано", show_alert=True)
+            await callback.message.edit_text("Объявление уже опубликовано")
             return
 
         product.publication = True
@@ -696,9 +728,8 @@ async def approve_ad(callback: CallbackQuery):
         settings = settings_result.scalar_one_or_none()
 
         if not settings or not settings.notifications_all:
-            await callback.answer(
+            await callback.message.edit_text(
                 "Объявление опубликовано, но уведомления о новом объявлении пользователям отключены",
-                show_alert=True,
             )
             return
 
@@ -785,42 +816,67 @@ async def approve_ad(callback: CallbackQuery):
             else:
                 blocked_users.append(str(user.telegram_id))
 
-    # Отправляем итоговое сообщение
-    await callback.message.answer(
+    await callback.message.edit_text(
         f"Объявление принято ✅\n"
         f"Отправлено успешно: {success_count}\n"
         f"Не удалось отправить: {blocked_count}",
     )
 
-    # Если кто-то заблокировал — отправляем списком
-    try:
-        if blocked_users:
-            text = "🚫 Заблокировали бота:\n" + "\n".join(
-                html.escape(u) for u in blocked_users
-            )
-
-            chunk_size = 4000
-            for i in range(0, len(text), chunk_size):
-                await callback.message.answer(
-                    text[i : i + chunk_size], parse_mode="HTML"
-                )
-
-    except Exception as e:
-        await callback.message.answer(f"ошибка показа заблокированных: {e}")
+    if blocked_users:
+        text = "🚫 Заблокировали бота:\n" + "\n".join(
+            html.escape(u) for u in blocked_users
+        )
+        chunk_size = 4000
+        for i in range(0, len(text), chunk_size):
+            await callback.message.answer(text[i : i + chunk_size], parse_mode="HTML")
 
 
+# Шаг 1 — при нажатии "Отклонить" отправляем подтверждение
 @router.callback_query(F.data.startswith("decline:"))
-async def decline_ad(callback: CallbackQuery):
+async def decline_ad_confirm(callback: CallbackQuery):
     product_id = int(callback.data.split(":")[1])
+    buttons = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Да", callback_data=f"decline_confirm_yes:{product_id}"
+                ),
+                InlineKeyboardButton(text="❌ Нет", callback_data="decline_confirm_no"),
+            ]
+        ]
+    )
+    await callback.message.answer(
+        "Вы уверены, что хотите отклонить это объявление?", reply_markup=buttons
+    )
+    await callback.answer()
+
+
+# Шаг 2 — если "Да", выполняем логику отклонения
+@router.callback_query(F.data.startswith("decline_confirm_yes:"))
+async def decline_ad_yes(callback: CallbackQuery):
+    product_id = int(callback.data.split(":")[1])
+    await process_decline_logic(callback, product_id)
+
+
+# Шаг 3 — если "Нет", отменяем
+@router.callback_query(F.data == "decline_confirm_no")
+async def decline_ad_no(callback: CallbackQuery):
+    await callback.message.edit_text("Отклонение отменено ❌")
+
+
+# Вынесенная логика отклонения
+async def process_decline_logic(callback: CallbackQuery, product_id: int):
     async with db_helper.session_factory() as session:
         product = await get_product_with_photos(session, product_id)
 
         if not product:
-            await callback.answer("Объявление не найдено", show_alert=True)
+            await callback.message.edit_text("Объявление не найдено", show_alert=True)
             return
 
         if product.publication is False:
-            await callback.answer("Объявление уже отклонено", show_alert=True)
+            await callback.message.edit_text(
+                "Объявление уже отклонено", show_alert=True
+            )
             return
 
         product.publication = False
@@ -834,7 +890,7 @@ async def decline_ad(callback: CallbackQuery):
         except Exception as e:
             print(f"Не удалось отправить уведомление: {e}")
 
-    await callback.answer("Объявление отклонено ❌", show_alert=True)
+    await callback.message.edit_text("Объявление отклонено ❌", show_alert=True)
 
 
 @router.callback_query(F.data == "add_categories")
