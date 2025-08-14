@@ -15,7 +15,10 @@ contact = ReplyKeyboardMarkup(
     keyboard=[
         [
             KeyboardButton(text="📱 Отправить номер телефона", request_contact=True),
-        ]
+        ],
+        [
+            KeyboardButton(text="Связаться через бота"),
+        ],
     ],
     resize_keyboard=True,
 )
