@@ -10,6 +10,9 @@ __all__ = [
     "Advertisement",
     "AdPhoto",
     "BotSettings",
+    "Chat",
+    "ChatMessage",
+    "ChatPhoto",
     "db_helper",
     "DatabaseHelper",
 ]
@@ -26,3 +29,5 @@ from .complaint import Complaint
 from .advertisement import Advertisement
 from .advertisement import AdPhoto
 from .settings import BotSettings
+from .chat import Chat, ChatMessage
+from .chat_photo import ChatPhoto

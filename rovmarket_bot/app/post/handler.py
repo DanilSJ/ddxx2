@@ -442,22 +442,25 @@ async def process_contact(message: Message, state: FSMContext):
     # ✍️ Если введено вручную — очищаем и проверяем
     elif message.text:
         raw = message.text.strip()
-        cleaned = await clean_phone(raw) if raw.startswith("+") else raw
+        # Если выбрана кнопка "Связаться через бота" — сохраняем как контакт без проверки
+        if raw == "Связаться через бота":
+            await state.update_data(contact="Связаться через бота")
+        else:
+            cleaned = await clean_phone(raw) if raw.startswith("+") else raw
 
-        if not re.match(CONTACT_REGEX, cleaned):
-            logger.warning(
-                "Invalid contact by user_id=%s value=%s", message.from_user.id, raw
-            )
-            await message.answer(
-                "❌ *Неверный формат контактных данных.*\n\n"
-                "Пожалуйста, отправьте один из следующих вариантов:\n"
-                "• Телефон (начиная с `+7`, `+380` или `+8`, например `+79591166234`)\n"
-                "• Email (например, `example@mail.com`)\n"
-                "• Telegram username (начиная с `@`, например `@yourname`)"
-            )
-            return
+            if not re.match(CONTACT_REGEX, cleaned):
+                logger.warning(
+                    "Invalid contact by user_id=%s value=%s", message.from_user.id, raw
+                )
+                await message.answer(
+                    "❌ *Неверный формат контактных данных.*\n\n"
+                    "Пожалуйста, отправьте один из следующих вариантов:\n"
+                    "• Телефон (начиная с `+7`, `+380` или `+8`, например `+79591166234`)\n"
+                    "• Email (например, `example@mail.com`)\n"
+                    "• Telegram username (начиная с `@`, например `@yourname`)")
+                return
 
-        await state.update_data(contact=cleaned)
+            await state.update_data(contact=cleaned)
 
     else:
         await message.answer(

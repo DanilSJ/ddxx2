@@ -22,6 +22,7 @@ from rovmarket_bot.app.post.handler import router as post
 from rovmarket_bot.app.search.handler import router as search
 from rovmarket_bot.app.ads.handler import router as ads
 from rovmarket_bot.app.admin.handler import router as admin
+from rovmarket_bot.app.chat.handler import router as chat
 from rovmarket_bot.app.settings.handler import router as settings_router
 from rovmarket_bot.app.help.handler import router as help_router
 
@@ -51,6 +52,7 @@ async def main():
     dp.include_router(admin)
     dp.include_router(help_router)
     dp.include_router(settings_router)
+    dp.include_router(chat)
 
     await ensure_redis_index()
     await asyncio.gather(

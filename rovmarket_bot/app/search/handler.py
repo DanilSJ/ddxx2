@@ -373,32 +373,39 @@ async def show_details(callback: CallbackQuery):
 
     await callback.answer()
 
-    photos_button = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Просмотреть фотографии",
-                    callback_data=f"show_photos:{product_id}",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Пожаловаться",
-                    callback_data=f"complaint:{product_id}",
-                )
-            ],
-        ]
-    )
+    # Кнопки для деталей объявления
+    details_buttons = [
+        [
+            InlineKeyboardButton(
+                text="Просмотреть фотографии", callback_data=f"show_photos:{product_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Пожаловаться", callback_data=f"complaint:{product_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Начать чат", callback_data=f"start_chat:{product_id}"
+            )
+        ],
+    ]
+    # Если контакт анонимный — добавить кнопку чата
+
+    if contact == "Связаться через бота":
+        details_buttons.insert(0, [])
+    details_markup = InlineKeyboardMarkup(inline_keyboard=details_buttons)
 
     try:
         if photos:
             media = InputMediaPhoto(
                 media=photos[0], caption=full_text, parse_mode="HTML"
             )
-            await callback.message.edit_media(media=media, reply_markup=photos_button)
+            await callback.message.edit_media(media=media, reply_markup=details_markup)
         else:
             await callback.message.edit_text(
-                full_text, reply_markup=photos_button, parse_mode="HTML"
+                full_text, reply_markup=details_markup, parse_mode="HTML"
             )
     except Exception:
         logger.warning(
@@ -409,12 +416,12 @@ async def show_details(callback: CallbackQuery):
             await callback.message.answer_photo(
                 photos[0],
                 caption=full_text,
-                reply_markup=photos_button,
+                reply_markup=details_markup,
                 parse_mode="HTML",
             )
         else:
             await callback.message.answer(
-                full_text, reply_markup=photos_button, parse_mode="HTML"
+                full_text, reply_markup=details_markup, parse_mode="HTML"
             )
 
 
