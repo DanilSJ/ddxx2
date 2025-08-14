@@ -188,13 +188,9 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
             page_ids = product_ids[start:end]
 
             if not page_ids:
-                await message.answer(
-                    "Нет объявлений на этой странице.", reply_markup=pagination_keyboard
-                )
-                logger.info(
-                    "No ads on page=%s for user_id=%s", page, message.from_user.id
-                )
-                return
+                page = max(0, min(page, ((total - 1) // PAGE_SIZE)))
+                await state.update_data(page=page)
+                return await show_ads_page(message, state, page)
 
             for pid in page_ids:
                 product_data = products.get(str(pid), {})
