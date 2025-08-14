@@ -215,21 +215,6 @@ async def process_name(message: Message, state: FSMContext):
     F.text != "📢 Разместить объявление",
     F.text != "🔍 Найти объявление",
 )
-@router.message(
-    Post.description,
-    ~F.text.startswith("/"),
-    F.text != "🔔 Уведомления",
-    F.text != "📋 Меню",
-    F.text != "📱 Отправить номер телефона",
-    F.text != "🔙 Назад",
-    F.text != "🔍 Показать все",
-    F.text != "🎛 Фильтры",
-    F.text != "📂 Категории",
-    F.text != "⚙️ Настройки",
-    F.text != "📋 Мои объявления",
-    F.text != "📢 Разместить объявление",
-    F.text != "🔍 Найти объявление",
-)
 async def process_description(message: Message, state: FSMContext):
     if len(message.text) > 750:
         await message.answer(
