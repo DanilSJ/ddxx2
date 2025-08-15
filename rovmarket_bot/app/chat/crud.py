@@ -20,7 +20,8 @@ from rovmarket_bot.core.models.chat_voice import ChatVoice
 
 
 async def create_or_get_chat(session, product_id, buyer_id, seller_id):
-
+    print(buyer_id)
+    print(seller_id)
     chat = await session.execute(
         select(Chat).where(
             Chat.product_id == product_id,
