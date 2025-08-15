@@ -147,7 +147,7 @@ async def chat(
             media_group = []
 
             if full_text:
-                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}:\n\n{full_text}"
+                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}(({chat.buyer_id})):\n\n{full_text}"
 
             if photos:
                 media_group.append(
