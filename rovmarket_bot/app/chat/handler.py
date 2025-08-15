@@ -324,6 +324,7 @@ async def my_chats(message: Message):
     except Exception as e:
         await message.answer(e)
 
+
 @router.callback_query(F.data.startswith("chat_"))
 async def open_chat(callback: CallbackQuery, state: FSMContext):
     chat_id = int(callback.data.split("_")[1])
