@@ -20,17 +20,7 @@ from rovmarket_bot.core.models.chat_voice import ChatVoice
 
 
 async def create_or_get_chat(session, product_id, buyer_id, seller_id):
-    buyer_exists = await session.scalar(select(User).where(User.telegram_id == buyer_id))
-    if not buyer_exists:
-        raise ValueError(f"Buyer {buyer_id} not found in DB")
-
-    # Проверка, что seller есть
-    seller_exists = await session.scalar(select(User).where(User.telegram_id == seller_id))
-    if not seller_exists:
-        raise ValueError(f"Seller {seller_id} not found in DB")
-
-    # Поиск чата
-    chat = await session.scalar(
+    chat = await session.execute(
         select(Chat).where(
             Chat.product_id == product_id,
             Chat.buyer_id == buyer_id,
@@ -38,12 +28,18 @@ async def create_or_get_chat(session, product_id, buyer_id, seller_id):
         )
     )
 
+    chat = chat.scalar_one_or_none()
     if not chat:
         chat = Chat(product_id=product_id, buyer_id=buyer_id, seller_id=seller_id)
         session.add(chat)
-        await session.commit()
-        await session.refresh(chat)
 
+        try:
+            await session.commit()
+            await session.refresh(chat)
+        except Exception as e:
+            await session.rollback()
+            print("Ошибка при коммите:", e)
+            raise
     return chat
 
 
