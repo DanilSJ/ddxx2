@@ -1,3 +1,5 @@
+from sqlalchemy import and_
+
 from rovmarket_bot.core.models import (
     db_helper,
     Chat,
@@ -21,11 +23,14 @@ async def create_or_get_chat(
     session: AsyncSession, product_id: int, buyer_id: int, seller_id: int
 ) -> Chat:
     stmt = select(Chat).where(
-        Chat.product_id == product_id,
-        Chat.buyer_id == buyer_id,
-        Chat.seller_id == seller_id,
-        Chat.is_active.is_(True),
+        and_(
+            Chat.product_id == product_id,
+            Chat.buyer_id == buyer_id,
+            Chat.seller_id == seller_id,
+            Chat.is_active.is_(True),
+        )
     )
+
     result = await session.execute(stmt)
     chat = result.scalars().first()
     if chat:
