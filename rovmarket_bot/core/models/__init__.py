@@ -13,6 +13,11 @@ __all__ = [
     "Chat",
     "ChatMessage",
     "ChatPhoto",
+    "ChatVideo",
+    "ChatSticker",
+    "ChatAudio",
+    "ChatVoice",
+    "ChatDocument",
     "db_helper",
     "DatabaseHelper",
 ]
@@ -31,3 +36,8 @@ from .advertisement import AdPhoto
 from .settings import BotSettings
 from .chat import Chat, ChatMessage
 from .chat_photo import ChatPhoto
+from .chat_video import ChatVideo
+from .chat_sticker import ChatSticker
+from .chat_audio import ChatAudio
+from .chat_document import ChatDocument
+from .chat_voice import ChatVoice

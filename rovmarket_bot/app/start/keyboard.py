@@ -15,6 +15,9 @@ menu_start = ReplyKeyboardMarkup(
             KeyboardButton(text="📋 Мои объявления"),
         ],
         [
+            KeyboardButton(text="👥 Мои чаты"),
+        ],
+        [
             KeyboardButton(text="⚙️ Настройки"),
         ],
     ],

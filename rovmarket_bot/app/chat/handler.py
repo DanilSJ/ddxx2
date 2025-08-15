@@ -1,3 +1,5 @@
+import time
+
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -8,6 +10,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     InputMediaPhoto,
+    InputMediaVideo,
 )
 
 from rovmarket_bot.app.chat.keyboard import menu_chat
@@ -17,8 +20,15 @@ from rovmarket_bot.app.chat.crud import (
     create_or_get_chat,
     add_message,
     get_chat_by_id,
-    get_active_chat_by_user_id,
-    get_user_chats, add_photo_to_message,
+    get_user_chats,
+    add_video_to_message,
+    add_audio_to_message,
+    add_voice_to_message,
+    add_document_to_message,
+    add_photo_to_message,
+    get_last_messages,
+    add_sticker_to_message,
+    mark_chat_as_inactive,
 )
 from rovmarket_bot.core.models import db_helper, Product, User
 
@@ -33,7 +43,24 @@ class ChatState(StatesGroup):
 # Ожидается, что chat_id будет в state, когда пользователь пишет в анонимный чат
 
 
-@router.message(ChatState.chatting)
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
+
+
+@router.message(
+    ChatState.chatting,
+    ~F.text.startswith("/"),
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
 async def chat(
     message: Message, state: FSMContext, album_messages: list[Message] | None = None
 ):
@@ -45,9 +72,6 @@ async def chat(
         )
         return
 
-    # Лимит сообщений
-    import time
-
     last_sent = data.get("last_message_time")
     now = time.time()
     if last_sent and now - last_sent < 3:
@@ -57,7 +81,6 @@ async def chat(
         return
     await state.update_data(last_message_time=now)
 
-    # Используем только текущее сообщение или альбом
     messages = album_messages if album_messages else [message]
 
     async with db_helper.session_factory() as session:
@@ -68,46 +91,124 @@ async def chat(
 
         if message.from_user.id == chat.buyer_id:
             sender_type = "покупателя"
-            recipient_id = chat.seller_id
+            recipient_id = int(chat.seller_id)
         elif message.from_user.id == chat.seller_id:
             sender_type = "продавца"
-            recipient_id = chat.buyer_id
+            recipient_id = int(chat.buyer_id)
         else:
             await message.answer("❌ Вы не участник этого чата.")
             return
 
-        # Собираем все фото и текст
-        photos = []
+        photos, videos, stickers, audios, voices, documents = [], [], [], [], [], []
         full_text = None
         for msg in messages:
-            if msg.text and not full_text:
+            if msg.sticker:
+                stickers.append(msg.sticker.file_id)
+                chat_message = await add_message(
+                    session, chat_id, msg.from_user.id, msg.text or ""
+                )
+                await add_sticker_to_message(
+                    session, chat_message.id, msg.sticker.file_id
+                )
+            if msg.audio:
+                audios.append(msg.audio.file_id)
+                chat_message = await add_message(
+                    session, chat_id, msg.from_user.id, msg.text or ""
+                )
+                await add_audio_to_message(session, chat_message.id, msg.audio.file_id)
+            if msg.voice:
+                voices.append(msg.voice.file_id)
+                chat_message = await add_message(
+                    session, chat_id, msg.from_user.id, msg.text or ""
+                )
+                await add_voice_to_message(session, chat_message.id, msg.voice.file_id)
+            if msg.document:
+                documents.append(msg.document.file_id)
+                chat_message = await add_message(
+                    session, chat_id, msg.from_user.id, msg.text or ""
+                )
+                await add_document_to_message(
+                    session, chat_message.id, msg.document.file_id
+                )
+            if msg.text:
                 full_text = msg.text
+                await add_message(session, chat_id, msg.from_user.id, msg.text)
             if msg.photo:
-                largest_photo = msg.photo[-1]  # выбираем самое большое
+                largest_photo = msg.photo[-1]
                 photos.append(largest_photo.file_id)
-                # Сохраняем в базе
                 chat_message = await add_message(
                     session, chat_id, msg.from_user.id, msg.text or ""
                 )
                 await add_photo_to_message(
                     session, chat_message.id, largest_photo.file_id
                 )
+            if msg.video:
+                videos.append(msg.video.file_id)
+                chat_message = await add_message(
+                    session, chat_id, msg.from_user.id, msg.text or ""
+                )
+                await add_video_to_message(session, chat_message.id, msg.video.file_id)
 
-        # Отправляем медиагруппу
         try:
-            if photos:
-                full_text = f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id}"
-                media_group = [InputMediaPhoto(media=photos[0], caption=full_text)]
-                media_group += [InputMediaPhoto(media=p) for p in photos[1:]]
-                await message.bot.send_media_group(int(recipient_id), media_group)
+            media_group = []
+            if full_text:
+                full_text = f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id}:\n\n{full_text}"
 
-            else:
+            if photos:
+                media_group.append(InputMediaPhoto(media=photos[0], caption=full_text))
+                media_group += [InputMediaPhoto(media=p) for p in photos[1:]]
+            if videos:
+                media_group.append(InputMediaVideo(media=videos[0], caption=full_text))
+                media_group += [InputMediaVideo(media=v) for v in videos[1:]]
+
+            if stickers:
                 await message.bot.send_message(
                     int(recipient_id),
-                    f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id}:\n\n{full_text}",
+                    f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (стикеры)",
                 )
-        except Exception as e:
+                for st in stickers:
+                    await message.bot.send_sticker(int(recipient_id), st)
+
+            for au in audios:
+                await message.bot.send_audio(
+                    int(recipient_id),
+                    au,
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (аудио)",
+                )
+
+            for vc in voices:
+                await message.bot.send_voice(
+                    int(recipient_id),
+                    vc,
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (голосовое)",
+                )
+
+            for doc in documents:
+                await message.bot.send_document(
+                    int(recipient_id),
+                    doc,
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (файлы)",
+                )
+
+            if media_group:
+                await message.bot.send_media_group(int(recipient_id), media_group)
+            else:
+                await message.bot.send_message(int(recipient_id), full_text)
+
+        except TelegramForbiddenError:
             logger.warning(
+                f"Пользователь {recipient_id} заблокировал бота или удалил аккаунт."
+            )
+            await mark_chat_as_inactive(
+                session, chat_id
+            )  # Функция пометит чат как закрытый
+            await message.answer(
+                "❌ Пользователь недоступен (возможно, заблокировал бота). Чат закрыт."
+            )
+        except TelegramBadRequest as e:
+            logger.error(f"Ошибка при отправке сообщения {recipient_id}: {e}")
+        except Exception as e:
+            logger.error(
                 f"Не удалось отправить сообщение пользователю {recipient_id}: {e}"
             )
 
@@ -163,7 +264,21 @@ async def start_anonymous_chat(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "exit_for_chat")
 async def exit_for_chat(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    chat_messages = data.get("chat_messages", [])  # Список ID сообщений чата
+
+    # Удаляем все сообщения чата
+    for msg_id in chat_messages:
+        try:
+            await callback.message.bot.delete_message(
+                chat_id=callback.from_user.id, message_id=msg_id
+            )
+        except Exception:
+            pass  # Игнорируем ошибки удаления
+
+    # Очищаем состояние
     await state.clear()
+
     await callback.message.answer(
         "💬 <b>Вы вышли из чата</b>\n\n"
         "Теперь вы можете продолжить общение, написав команду "
@@ -221,13 +336,96 @@ async def open_chat(callback: CallbackQuery, state: FSMContext):
             await callback.message.answer("❌ Вы не участник этого чата.")
             return
 
-    # Сохраняем chat_id в state и переводим в состояние ChatState.chatting
-    await state.update_data(chat_id=chat_id)
+        messages = await get_last_messages(session, chat_id, limit=15)
 
+    await state.update_data(chat_id=chat_id)
     await state.set_state(ChatState.chatting)
 
-    await callback.message.answer(
+    await state.update_data(chat_id=chat_id, chat_messages=[])  # Список сообщений
+
+    for msg in messages:
+        sender = "Покупатель" if msg["sender_id"] == chat.buyer_id else "Продавец"
+        text = msg["text"]
+        media_group = []
+        msg_ids = []
+
+        # Фото
+        for photo in msg.get("photos", []):
+            if photo:
+                if text:
+                    media_group.append(
+                        InputMediaPhoto(media=photo, caption=f"💬 {sender}:\n{text}")
+                    )
+                    text = None
+                else:
+                    media_group.append(InputMediaPhoto(media=photo))
+
+        # Видео
+        for video in msg.get("videos", []):
+            if video:
+                if text:
+                    media_group.append(
+                        InputMediaVideo(media=video, caption=f"💬 {sender}:\n{text}")
+                    )
+                    text = None
+                else:
+                    media_group.append(InputMediaVideo(media=video))
+
+        if media_group:
+            sent = await callback.message.answer_media_group(media_group)
+            msg_ids.extend([m.message_id for m in sent])
+
+        # Если остался текст без медиа
+        if text:
+            sent_msg = await callback.message.answer(f"💬 {sender}:\n{text}")
+            msg_ids.append(sent_msg.message_id)
+
+        # Стикеры
+        for st in msg.get("stickers", []):
+            if st:
+                sent_msg = await callback.message.answer_sticker(st)
+                msg_ids.append(sent_msg.message_id)
+
+        # Аудио
+        for au in msg.get("audios", []):
+            if au:
+                sent_msg = await callback.message.answer_audio(
+                    au, caption=f"💬 {sender}:"
+                )
+                msg_ids.append(sent_msg.message_id)
+
+        # Голосовые
+        for vc in msg.get("voices", []):
+            if vc:
+                sent_msg = await callback.message.answer_voice(
+                    vc, caption=f"💬 {sender}:"
+                )
+                msg_ids.append(sent_msg.message_id)
+
+        # Документы
+        for doc in msg.get("documents", []):
+            if doc:
+                sent_msg = await callback.message.answer_document(
+                    doc, caption=f"💬 {sender}:"
+                )
+                msg_ids.append(sent_msg.message_id)
+
+        # Сохраняем ID сообщений
+        chat_data = await state.get_data()
+        chat_messages = chat_data.get("chat_messages", [])
+        chat_messages.extend(msg_ids)
+        await state.update_data(chat_messages=chat_messages)
+
+    sent_msg = await callback.message.answer(
         "💬 Чат открыт. Теперь вы можете писать сообщения прямо сюда.",
         reply_markup=menu_chat,
     )
-    await callback.answer()
+    chat_messages = (await state.get_data()).get("chat_messages", [])
+    chat_messages.append(sent_msg.message_id)
+    await state.update_data(chat_messages=chat_messages)
+
+
+@router.message(F.text == "👥 Мои чаты")
+async def button_my_chats(message: Message, state: FSMContext):
+    await state.clear()
+    await my_chats(message)

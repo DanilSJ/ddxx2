@@ -38,6 +38,41 @@ class ChatMessage(Base):
         lazy="joined",
     )
 
+    videos = relationship(
+        "ChatVideo",
+        back_populates="chat",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
+    stickers = relationship(
+        "ChatSticker",
+        back_populates="chat",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
+    documents = relationship(
+        "ChatDocument",
+        back_populates="chat",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
+    audios = relationship(
+        "ChatAudio",
+        back_populates="chat",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
+    voices = relationship(
+        "ChatVoice",
+        back_populates="chat",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
