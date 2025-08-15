@@ -54,7 +54,6 @@ async def main():
     dp.include_router(settings_router)
     dp.include_router(chat)
 
-
     await ensure_redis_index()
     await asyncio.gather(
         dp.start_polling(bot),
