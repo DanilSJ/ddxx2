@@ -222,37 +222,36 @@ async def chat(
 @router.callback_query(F.data.startswith("start_chat:"))
 async def start_anonymous_chat(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-
     product_id = int(callback.data.split(":")[1])
 
     async with db_helper.session_factory() as session:
-        # Проверяем существование объявления
         product = await session.scalar(
             select(Product)
             .options(selectinload(Product.user))
             .where(Product.id == product_id)
         )
-
         if not product:
             await callback.message.answer("❌ Объявление не найдено.")
             return
 
-        seller_id = product.user.telegram_id
-        buyer_id = callback.from_user.id
+        seller_id = product.user.id  # PK продавца
+        buyer = await session.scalar(
+            select(User).where(User.telegram_id == callback.from_user.id)
+        )
+        if not buyer:
+            await callback.message.answer("❌ Вы не зарегистрированы в системе.")
+            return
+        buyer_id = buyer.id
 
         if seller_id == buyer_id:
             await callback.message.answer("❌ Нельзя начать чат с самим собой.")
             return
 
         chat = await create_or_get_chat(session, product_id, buyer_id, seller_id)
-        # Сохраняем chat_id в state
         await state.update_data(chat_id=chat.id)
-
-        # Здесь устанавливаем состояние ChatState.chatting
         await state.set_state(ChatState.chatting)
-    product_name = await get_product_name(session, int(product_id))
 
-    # Подтверждаем пользователю
+    product_name = await get_product_name(session, product_id)
     await callback.message.answer(
         f"💬 Анонимный чат по объявлению {product_name} начат.\n"
         f"Пишите сообщение прямо сюда, и оно будет отправлено продавцу."
