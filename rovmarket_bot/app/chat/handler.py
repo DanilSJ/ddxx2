@@ -13,6 +13,8 @@ from aiogram.types import (
     InputMediaPhoto,
     InputMediaVideo,
 )
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from rovmarket_bot.app.chat.keyboard import menu_chat
 from rovmarket_bot.app.start.keyboard import menu_start
@@ -225,12 +227,17 @@ async def start_anonymous_chat(callback: CallbackQuery, state: FSMContext):
 
     async with db_helper.session_factory() as session:
         # Проверяем существование объявления
-        product = await session.get(Product, product_id)
+        product = await session.scalar(
+            select(Product)
+            .options(selectinload(Product.user))
+            .where(Product.id == product_id)
+        )
+
         if not product:
             await callback.message.answer("❌ Объявление не найдено.")
             return
 
-        seller_id = product.user_id
+        seller_id = product.user.telegram_id
         buyer_id = callback.from_user.id
 
         if seller_id == buyer_id:
@@ -259,8 +266,6 @@ async def start_anonymous_chat(callback: CallbackQuery, state: FSMContext):
         f"💬 Анонимный чат по объявлению {product_name} начат.\n"
         f"Пишите сообщение прямо сюда, и оно будет отправлено продавцу."
     )
-
-    await callback.answer()
 
 
 @router.callback_query(F.data == "exit_for_chat")
