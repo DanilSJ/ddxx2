@@ -140,12 +140,14 @@ async def send_user_products(
         date_str = product.created_at.strftime("%d.%m.%Y %H:%M")
         views_count = len(product.views) if getattr(product, "views", None) else 0
 
+        contact_text = "Связь через бота" if contact == "via_bot" else contact
+
         caption = (
             f"<b>📋 {name}</b>\n\n"
             f"📝 {description}\n\n"
             f"💰 <b>Цена:</b> {price_str}\n"
             f"📂 <b>Категория:</b> {category_name}\n"
-            f"📞 <b>Контакты:</b> {contact}\n"
+            f"📞 <b>Контакты:</b> {contact_text}\n"
             f"📅 <b>Дата:</b> {date_str}\n"
             f"👥 <b>Просмотры:</b> {views_count}"
         )
@@ -522,12 +524,14 @@ async def show_product_photos(callback: CallbackQuery):
     date_str = product.created_at.strftime("%d.%m.%Y %H:%M")
     views_count = len(product.views) if getattr(product, "views", None) else 0
 
+    contact_text = "Связь через бота" if contact == "via_bot" else contact
+
     full_caption = (
         f"<b>📋 {name}</b>\n\n"
         f"📝 {description}\n\n"
         f"💰 <b>Цена:</b> {price_str}\n"
         f"📂 <b>Категория:</b> {category_name}\n"
-        f"📞 <b>Контакты:</b> {contact}\n"
+        f"📞 <b>Контакты:</b> {contact_text}\n"
         f"📅 <b>Дата:</b> {date_str}\n"
         f"👥 <b>Просмотры:</b> {views_count}"
     )

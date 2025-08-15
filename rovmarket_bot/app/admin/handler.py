@@ -604,11 +604,15 @@ async def show_publication(callback: CallbackQuery):
         if len(description) > MAX_DESCRIPTION_LENGTH:
             description = description[: MAX_DESCRIPTION_LENGTH - 3] + "..."
 
+        contact_text = (
+            "Связь через бота" if product.contact == "via_bot" else product.contact
+        )
+
         caption = (
             f"<b>{product.name}</b>\n\n"
             f"{description}\n\n"
             f"<b>Цена:</b> {product.price or 'договорная'}\n"
-            f"<b>Контакт:</b> {product.contact}"
+            f"<b>Контакт:</b> {contact_text}\n"
         )
 
         if len(caption) > MAX_CAPTION_LENGTH:
@@ -770,11 +774,15 @@ async def process_approve_logic(callback: CallbackQuery, product_id: int):
 
     created_str = product.created_at.strftime("%d.%m.%Y") if product.created_at else "-"
 
+    contact_text = (
+        "Связь через бота" if product.contact == "via_bot" else product.contact
+    )
+
     full_text = (
         f"📌 {product.name}\n"
         f"💬 {product.description or 'Без описания'}\n"
         f"💰 Цена: {price}\n"
-        f"\n📞 Контакт: {contact}\n"
+        f"\n📞 Контакт: {contact_text}\n"
         f"📍 Геолокация: {geo_text}\n"
         f"🕒 Дата создания: {created_str}"
     )
@@ -1051,11 +1059,15 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
         try:
             first_photo = product.photos[0].photo_url if product.photos else None
             views = views_counts.get(product.id, 0)
+            contact_text = (
+                "Связь через бота" if product.contact == "via_bot" else product.contact
+            )
+
             caption = (
                 f"<b>#{product.id} — {product.name}</b>\n\n"
                 f"{product.description}\n\n"
                 f"<b>Цена:</b> {product.price if product.price is not None else 'Не указана'}\n"
-                f"<b>Контакт:</b> {product.contact}\n"
+                f"<b>Контакт:</b> {contact_text}\n"
                 f"<b>Дата:</b> {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
                 f"<b>Просмотры:</b> {views}\n"
             )
@@ -1171,11 +1183,15 @@ async def ads_search_handler(message: Message, state: FSMContext):
 
     for product in products:
         first_photo = product.photos[0].photo_url if product.photos else None
+        contact_text = (
+            "Связь через бота" if product.contact == "via_bot" else product.contact
+        )
+
         caption = (
             f"<b>#{product.id} — {product.name}</b>\n\n"
             f"{product.description}\n\n"
             f"<b>Цена:</b> {product.price if product.price is not None else 'Не указана'}\n"
-            f"<b>Контакт:</b> {product.contact}\n"
+            f"<b>Контакт:</b> {contact_text}\n"
             f"<b>Дата:</b> {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         )
 
