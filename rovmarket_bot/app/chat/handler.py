@@ -148,13 +148,12 @@ async def chat(
 
             if full_text:
                 full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}:\n\n{full_text}"
-            else:
-                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (фото)"
+
             if photos:
-                media_group.append(InputMediaPhoto(media=photos[0], caption=full_text))
+                media_group.append(InputMediaPhoto(media=photos[0], caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}"))
                 media_group += [InputMediaPhoto(media=p) for p in photos[1:]]
             if videos:
-                media_group.append(InputMediaVideo(media=videos[0], caption=full_text))
+                media_group.append(InputMediaVideo(media=videos[0], caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}"))
                 media_group += [InputMediaVideo(media=v) for v in videos[1:]]
 
             if stickers:
