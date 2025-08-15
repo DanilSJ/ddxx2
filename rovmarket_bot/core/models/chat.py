@@ -8,8 +8,12 @@ class Chat(Base):
     __tablename__ = "chat"
 
     product_id: Mapped[int] = mapped_column(ForeignKey("product.id"), nullable=False)
-    buyer_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user.id"), nullable=False)
-    seller_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user.id"), nullable=False)
+    buyer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("user.id"), nullable=False
+    )
+    seller_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("user.id"), nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
