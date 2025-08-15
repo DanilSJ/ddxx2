@@ -313,10 +313,14 @@ async def my_chats(message: Message):
             product_name = product.name if product else f"Товар #{chat.product_id}"
 
             # Добавляем buyer_id в скобках
-            button_text = f"{index}. {product_name} (Buyer ID: {chat.buyer_id})"
+            button_text = f"{index}. {product_name} ({chat.buyer_id})"
 
             buttons.append(
-                [InlineKeyboardButton(text=button_text, callback_data=f"chat_{chat.id}")]
+                [
+                    InlineKeyboardButton(
+                        text=button_text, callback_data=f"chat_{chat.id}"
+                    )
+                ]
             )
 
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
