@@ -150,10 +150,20 @@ async def chat(
                 full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}:\n\n{full_text}"
 
             if photos:
-                media_group.append(InputMediaPhoto(media=photos[0], caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}"))
+                media_group.append(
+                    InputMediaPhoto(
+                        media=photos[0],
+                        caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (фото)",
+                    )
+                )
                 media_group += [InputMediaPhoto(media=p) for p in photos[1:]]
             if videos:
-                media_group.append(InputMediaVideo(media=videos[0], caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}"))
+                media_group.append(
+                    InputMediaVideo(
+                        media=videos[0],
+                        caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (видео)",
+                    )
+                )
                 media_group += [InputMediaVideo(media=v) for v in videos[1:]]
 
             if stickers:
@@ -296,15 +306,18 @@ async def my_chats(message: Message):
             await message.answer("❌ У вас пока нет чатов.")
             return
 
-        # формируем список кнопок
+        # формируем список кнопок с порядковым номером
         buttons = []
-        for chat in chats:
+        for index, chat in enumerate(
+            chats, start=1
+        ):  # start=1 чтобы счет начинался с 1
             product = await session.get(Product, chat.product_id)
             product_name = product.name if product else f"Товар #{chat.product_id}"
             buttons.append(
                 [
                     InlineKeyboardButton(
-                        text=product_name, callback_data=f"chat_{chat.id}"
+                        text=f"{index}. {product_name}",  # добавляем номер чата
+                        callback_data=f"chat_{chat.id}",
                     )
                 ]
             )
