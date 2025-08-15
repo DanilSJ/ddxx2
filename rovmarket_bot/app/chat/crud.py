@@ -97,8 +97,7 @@ async def get_active_chat_by_user_id(
 
 async def get_user_chats(session: AsyncSession, user_id: int):
     """
-    Получает все активные чаты для пользователя (покупатель или продавец).
-    Возвращает None, если чаты не найдены.
+    Получает все активные чаты для пользователя (покупатель или продавец)
     """
     stmt = (
         select(Chat)
@@ -110,7 +109,7 @@ async def get_user_chats(session: AsyncSession, user_id: int):
     )
     result = await session.execute(stmt)
     chats = result.scalars().all()
-    return chats if chats else None
+    return chats
 
 
 async def get_product_name(session: AsyncSession, product_id: int) -> str:
