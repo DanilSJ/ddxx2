@@ -97,22 +97,22 @@ async def get_active_chat_by_user_id(
 
 async def get_user_chats(session: AsyncSession, user_id: int):
     """
-    Получает все активные чаты для пользователя (покупатель или продавец)
+    Получает все активные чаты для пользователя (покупатель или продавец).
+    Возвращает None, если чаты не найдены.
     """
-    try:
-        stmt = (
-            select(Chat)
-            .where(
-                ((Chat.buyer_id == user_id) | (Chat.seller_id == user_id))
-                & (Chat.is_active.is_(True))
-            )
-            .order_by(Chat.id.desc())
+    stmt = (
+        select(Chat)
+        .where(
+            ((Chat.buyer_id == user_id) | (Chat.seller_id == user_id))
+            & (Chat.is_active.is_(True))
         )
-        result = await session.execute(stmt)
-        chats = result.scalars().all()
-        return chats
-    except Exception as error:
-        return error
+        .order_by(Chat.id.desc())
+    )
+    result = await session.execute(stmt)
+    chats = result.scalars().all()
+    return chats if chats else None
+
+
 
 async def get_product_name(session: AsyncSession, product_id: int) -> str:
     """
