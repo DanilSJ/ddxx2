@@ -293,36 +293,33 @@ async def exit_for_chat(callback: CallbackQuery, state: FSMContext):
 
 @router.message(Command("my_chats"))
 async def my_chats(message: Message):
-    try:
-        user_id = message.from_user.id
+    user_id = message.from_user.id
+    await message.answer("dw")
+    async with db_helper.session_factory() as session:
+        chats = await get_user_chats(session, user_id)
 
-        async with db_helper.session_factory() as session:
-            chats = await get_user_chats(session, user_id)
+        if not chats:
+            await message.answer("❌ У вас пока нет чатов.")
+            return
 
-            if not chats:
-                await message.answer("❌ У вас пока нет чатов.")
-                return
+        # формируем список кнопок
+        buttons = []
+        for chat in chats:
+            product = await session.get(Product, chat.product_id)
+            product_name = product.name if product else f"Товар #{chat.product_id}"
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        text=product_name, callback_data=f"chat_{chat.id}"
+                    )
+                ]
+            )
+            # каждая кнопка в отдельном списке, чтобы была на своей строке
 
-            # формируем список кнопок
-            buttons = []
-            for chat in chats:
-                product = await session.get(Product, chat.product_id)
-                product_name = product.name if product else f"Товар #{chat.product_id}"
-                buttons.append(
-                    [
-                        InlineKeyboardButton(
-                            text=product_name, callback_data=f"chat_{chat.id}"
-                        )
-                    ]
-                )
-                # каждая кнопка в отдельном списке, чтобы была на своей строке
+        # создаём клавиатуру с кнопками
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-            # создаём клавиатуру с кнопками
-            kb = InlineKeyboardMarkup(inline_keyboard=buttons)
-
-            await message.answer("💬 Ваши чаты:", reply_markup=kb)
-    except Exception as e:
-        await message.answer(e)
+        await message.answer("💬 Ваши чаты:", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("chat_"))
