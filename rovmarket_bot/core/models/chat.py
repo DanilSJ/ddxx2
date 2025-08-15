@@ -9,10 +9,10 @@ class Chat(Base):
 
     product_id: Mapped[int] = mapped_column(ForeignKey("product.id"), nullable=False)
     buyer_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("user.id"), nullable=False
+        BigInteger, ForeignKey("user.telegram_id"), nullable=False
     )
     seller_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("user.id"), nullable=False
+        BigInteger, ForeignKey("user.telegram_id"), nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
