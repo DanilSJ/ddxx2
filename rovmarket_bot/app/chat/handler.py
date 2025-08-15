@@ -243,8 +243,10 @@ async def start_anonymous_chat(callback: CallbackQuery, state: FSMContext):
         buyer_telegram_id = callback.from_user.id
 
         # Создаём или получаем чат
-        chat = await create_or_get_chat(session, product_id, buyer_id, seller_id)
-
+        try:
+            chat = await create_or_get_chat(session, product_id, buyer_id, seller_id)
+        except Exception as e:
+            print(e)
         # Сохраняем chat_id в state
         await state.update_data(chat_id=chat.id)
 
