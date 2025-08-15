@@ -770,14 +770,16 @@ async def category_selected(callback: CallbackQuery, state: FSMContext):
     await callback.answer(f"✅ Категория выбрана: {category_name}")
 
     await callback.message.answer(
-        "📞 Укажите ваши контактные данные:\n\n"
+        "📞 Пожалуйста, укажите ваши контактные данные:\n\n"
         "— Номер телефона (начиная с `+7`, `+380` или `+8`)\n"
         "— Email (например, `example@mail.com`)\n"
         "— Telegram username (начиная с `@`)\n\n"
-        "Чтобы быстро поделиться номером телефона, нажмите кнопку «📱 Отправить номер телефона» ниже 👇\n"
-        "Или нажмите «Пропустить», если не хотите менять контактные данные:",
+        "Для быстрого обмена номером телефона нажмите кнопку «📱 Отправить номер телефона» ниже 👇\n"
+        "Или нажмите «Пропустить», если не хотите менять контактные данные.\n\n"
+        "💡 Также вы можете выбрать «Связаться через бота (анонимно)» — покупатель не увидит ваши реальные контакты.",
         reply_markup=menu_skip_back_contact,
     )
+
     await state.set_state(EditProductState.waiting_contact)
 
 
@@ -793,11 +795,12 @@ async def set_price_negotiable_edit(callback: CallbackQuery, state: FSMContext):
     await state.update_data(new_price=None)
     await callback.message.answer(
         "🤝 Цена установлена как **договорная**.\n\n"
-        "📞 Теперь укажите, как с вами связаться или нажмите «Пропустить»:\n"
-        "— Телефон (`+7`, `+380`, `+8`)\n"
-        "— Email (`example@mail.com`)\n"
-        "— Telegram (`@username`)\n\n"
-        "Или нажмите кнопку «📱 Отправить номер телефона» ниже 👇",
+        "📞 Укажите, как с вами связаться, или нажмите «Пропустить»:\n"
+        "— Телефон (начиная с `+7`, `+380` или `+8`)\n"
+        "— Email (например, `example@mail.com`)\n"
+        "— Telegram username (начиная с `@`)\n\n"
+        "Для быстрого обмена номером телефона нажмите кнопку «📱 Отправить номер телефона» ниже 👇\n"
+        "💡 Также можно выбрать «Связаться через бота (анонимно)» — покупатель не увидит ваши реальные контакты.",
         reply_markup=menu_skip_back_contact,
     )
     await state.set_state(EditProductState.waiting_contact)
