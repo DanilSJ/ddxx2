@@ -20,14 +20,12 @@ from rovmarket_bot.core.models.chat_voice import ChatVoice
 
 
 async def create_or_get_chat(session, product_id, buyer_id, seller_id):
-    buyer_exists = await select(User).where(User.telegram_id == buyer_id)
+    buyer_exists = await session.scalar(select(User).where(User.telegram_id == buyer_id))
     if not buyer_exists:
         raise ValueError(f"Buyer {buyer_id} not found in DB")
 
     # Проверка, что seller есть
-    seller_exists = await session.scalar(
-        select(User).where(User.telegram_id == seller_id)
-    )
+    seller_exists = await session.scalar(select(User).where(User.telegram_id == seller_id))
     if not seller_exists:
         raise ValueError(f"Seller {seller_id} not found in DB")
 
