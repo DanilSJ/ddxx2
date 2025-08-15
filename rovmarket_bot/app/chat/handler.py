@@ -147,7 +147,7 @@ async def chat(
             media_group = []
 
             if full_text:
-                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}(({chat.buyer_id})):\n\n{full_text}"
+                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}({chat.buyer_id}):\n\n{full_text}"
 
             if photos:
                 media_group.append(
@@ -308,18 +308,15 @@ async def my_chats(message: Message):
 
         # формируем список кнопок с порядковым номером
         buttons = []
-        for index, chat in enumerate(
-            chats, start=1
-        ):  # start=1 чтобы счет начинался с 1
+        for index, chat in enumerate(chats, start=1):
             product = await session.get(Product, chat.product_id)
             product_name = product.name if product else f"Товар #{chat.product_id}"
+
+            # Добавляем buyer_id в скобках
+            button_text = f"{index}. {product_name} (Buyer ID: {chat.buyer_id})"
+
             buttons.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"{index}. {product_name}",  # добавляем номер чата
-                        callback_data=f"chat_{chat.id}",
-                    )
-                ]
+                [InlineKeyboardButton(text=button_text, callback_data=f"chat_{chat.id}")]
             )
 
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
