@@ -15,6 +15,7 @@ from .keyboard import (
     pagination_keyboard,
     build_filter_options_keyboard,
     build_filter_pagination_keyboard,
+    get_menu_page,
 )
 from .redis_search import search_in_redis
 from rovmarket_bot.core.models import db_helper
@@ -154,6 +155,16 @@ async def button_filters(message: Message, state: FSMContext):
     logger.info("Search filters opened for user_id=%s", message.from_user.id)
 
 
+@router.callback_query(lambda c: c.data and c.data.startswith("page_inline_button:"))
+async def paginate_ads_inline(callback: CallbackQuery, state: FSMContext):
+    page = int(callback.data.split(":")[1])
+    await state.update_data(page=page)
+    await callback.answer()  # чтобы убрать "часики" на кнопке
+    message = callback.message
+    await show_ads_page(message, state, page)
+    logger.info("Ads inline pagination user_id=%s page=%s", callback.from_user.id, page)
+
+
 @router.message(F.text.in_(["⬅️", "➡️"]))
 async def paginate_ads(message: Message, state: FSMContext):
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
@@ -229,7 +240,10 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                 f"Страница {page+1} из {((total-1)//PAGE_SIZE)+1}",
                 reply_markup=pagination_keyboard,
             )
-            await message.answer("Используйте кнопки для перелистывания страниц ⬅️➡️")
+            await message.answer(
+                "Используйте кнопки для перелистывания страниц ⬅️➡️",
+                reply_markup=get_menu_page(page),
+            )
         else:
             await show_ads_page(message, state, 0)
             logger.info(
@@ -701,14 +715,16 @@ async def show_products_by_category(
                 info_text, reply_markup=pagination_keyboard
             )
             await message_or_callback.answer(
-                "Используйте кнопки для перелистывания страниц ⬅️➡️"
+                "Используйте кнопки для перелистывания страниц ⬅️➡️",
+                reply_markup=get_menu_page(page),
             )
         else:
             await message_or_callback.message.answer(
                 info_text, reply_markup=pagination_keyboard
             )
             await message_or_callback.message.answer(
-                "Используйте кнопки для перелистывания страниц ⬅️➡️"
+                "Используйте кнопки для перелистывания страниц ⬅️➡️",
+                reply_markup=get_menu_page(page),
             )
 
 
@@ -809,14 +825,16 @@ async def show_products_by_category_filtered(
         if isinstance(message_or_callback, Message):
             await message_or_callback.answer(info_text, reply_markup=pagination_kb)
             await message_or_callback.answer(
-                "Используйте кнопки для перелистывания страниц ⬅️➡️"
+                "Используйте кнопки для перелистывания страниц ⬅️➡️",
+                reply_markup=get_menu_page(page),
             )
         else:
             await message_or_callback.message.answer(
                 info_text, reply_markup=pagination_kb
             )
             await message_or_callback.message.answer(
-                "Используйте кнопки для перелистывания страниц ⬅️➡️"
+                "Используйте кнопки для перелистывания страниц ⬅️➡️",
+                reply_markup=get_menu_page(page),
             )
 
 

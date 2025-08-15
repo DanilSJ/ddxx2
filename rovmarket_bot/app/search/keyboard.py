@@ -63,6 +63,25 @@ def build_filter_options_keyboard(category_name: str) -> InlineKeyboardMarkup:
     )
 
 
+def get_menu_page(page: int) -> InlineKeyboardMarkup:
+    """
+    Создает клавиатуру для пагинации с текущей страницей page.
+    """
+    menu_pagination_inline = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️", callback_data=f"page_inline_button:{page-1}"  # уменьшение
+                ),
+                InlineKeyboardButton(
+                    text="➡️", callback_data=f"page_inline_button:{page+1}"  # увеличение
+                ),
+            ]
+        ]
+    )
+    return menu_pagination_inline
+
+
 def build_filter_pagination_keyboard(
     category_name: str,
     page: int,
