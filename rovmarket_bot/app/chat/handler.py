@@ -320,14 +320,23 @@ async def my_chats(message: Message):
 @router.callback_query(F.data.startswith("chat_"))
 async def open_chat(callback: CallbackQuery, state: FSMContext):
     chat_id = int(callback.data.split("_")[1])
-    user_id = callback.from_user.id
 
     async with db_helper.session_factory() as session:
+        # Достаём PK пользователя по Telegram ID
+        user = await session.scalar(
+            select(User).where(User.telegram_id == callback.from_user.id)
+        )
+        if not user:
+            await callback.message.answer("❌ Вы не зарегистрированы в системе.")
+            return
+        user_id = user.id  # теперь это PK
+
         chat = await get_chat_by_id(session, chat_id)
         if not chat or not chat.is_active:
             await callback.message.answer("❌ Чат не найден или неактивен.")
             return
 
+        # Проверяем, что пользователь — участник чата
         if user_id not in [chat.buyer_id, chat.seller_id]:
             await callback.message.answer("❌ Вы не участник этого чата.")
             return
@@ -336,8 +345,7 @@ async def open_chat(callback: CallbackQuery, state: FSMContext):
 
     await state.update_data(chat_id=chat_id)
     await state.set_state(ChatState.chatting)
-
-    await state.update_data(chat_id=chat_id, chat_messages=[])  # Список сообщений
+    await state.update_data(chat_id=chat_id, chat_messages=[])
 
     for msg in messages:
         sender = "Покупатель" if msg["sender_id"] == chat.buyer_id else "Продавец"
