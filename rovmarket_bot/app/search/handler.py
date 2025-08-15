@@ -199,9 +199,21 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
             page_ids = product_ids[start:end]
 
             if not page_ids:
-                page = max(0, min(page, ((total - 1) // PAGE_SIZE)))
-                await state.update_data(page=page)
-                return await show_ads_page(message, state, page)
+                page = max(0, page)
+                while True:
+                    start = page * PAGE_SIZE
+                    end = start + PAGE_SIZE
+                    page_ids = product_ids[start:end]
+
+                    if page_ids:
+                        break  # есть данные — выходим из цикла
+
+                    # корректируем страницу
+                    if page > 0:
+                        page -= 1
+                    else:
+                        await message.answer("Нет доступных объявлений")
+                        return
 
             for pid in page_ids:
                 product_data = products.get(str(pid), {})
