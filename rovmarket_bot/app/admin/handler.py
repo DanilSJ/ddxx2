@@ -177,7 +177,7 @@ async def toggle_notifications_handler(callback: CallbackQuery):
 async def start_broadcast(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BroadcastStates.waiting_for_text)
     await callback.message.answer(
-        "📝 Введите текст, который хотите разослать всем пользователям:",
+        "📝 Введите текст, который хотите разослать всем пользователям (можно в html виде):",
         reply_markup=menu_back,
     )
     await callback.answer()
@@ -218,7 +218,7 @@ async def send_broadcast(message: Message, state: FSMContext):
             await message.bot.send_message(
                 chat_id=user.telegram_id,
                 text=text,
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
             success_count += 1
         except Exception:
