@@ -33,6 +33,7 @@ from rovmarket_bot.app.chat.crud import (
     add_sticker_to_message,
     mark_chat_as_inactive,
     get_product_name,
+    get_telegram_id_by_user_id,
 )
 from rovmarket_bot.core.models import db_helper, Product, User
 
@@ -50,17 +51,21 @@ class ChatState(StatesGroup):
 @router.message(
     ChatState.chatting,
     ~F.text.startswith("/"),
-    F.text != "🔔 Уведомления",
-    F.text != "📋 Меню",
-    F.text != "📱 Отправить номер телефона",
-    F.text != "🔙 Назад",
-    F.text != "🔍 Показать все",
-    F.text != "🎛 Фильтры",
-    F.text != "📂 Категории",
-    F.text != "⚙️ Настройки",
-    F.text != "📋 Мои объявления",
-    F.text != "📢 Разместить объявление",
-    F.text != "🔍 Найти объявление",
+    F.text.not_in(
+        {
+            "🔔 Уведомления",
+            "📋 Меню",
+            "📱 Отправить номер телефона",
+            "🔙 Назад",
+            "🔍 Показать все",
+            "🎛 Фильтры",
+            "📂 Категории",
+            "⚙️ Настройки",
+            "📋 Мои объявления",
+            "📢 Разместить объявление",
+            "🔍 Найти объявление",
+        }
+    ),
 )
 async def chat(
     message: Message, state: FSMContext, album_messages: list[Message] | None = None
@@ -90,72 +95,61 @@ async def chat(
             await message.answer("❌ Чат неактивен или не найден.")
             return
 
-        if message.from_user.id == chat.buyer_id:
+        # Определяем, кто отправитель
+        if message.from_user.id == chat.buyer.telegram_id:
             sender_type = "покупателя"
-            recipient_id = int(chat.seller_id)
-        elif message.from_user.id == chat.seller_id:
-            sender_type = "продавца"
-            recipient_id = int(chat.buyer_id)
+            recipient_user = chat.seller
+            sender_id = chat.buyer_id
         else:
-            await message.answer("❌ Вы не участник этого чата.")
-            return
+            sender_type = "продавца"
+            recipient_user = chat.buyer
+            sender_id = chat.seller_id
+
+        recipient_id = recipient_user.telegram_id
 
         photos, videos, stickers, audios, voices, documents = [], [], [], [], [], []
         full_text = None
+
         for msg in messages:
+            chat_message = await add_message(
+                session, chat_id, sender_id, msg.text or ""
+            )
             if msg.sticker:
                 stickers.append(msg.sticker.file_id)
-                chat_message = await add_message(
-                    session, chat_id, msg.from_user.id, msg.text or ""
-                )
                 await add_sticker_to_message(
                     session, chat_message.id, msg.sticker.file_id
                 )
             if msg.audio:
                 audios.append(msg.audio.file_id)
-                chat_message = await add_message(
-                    session, chat_id, msg.from_user.id, msg.text or ""
-                )
                 await add_audio_to_message(session, chat_message.id, msg.audio.file_id)
             if msg.voice:
                 voices.append(msg.voice.file_id)
-                chat_message = await add_message(
-                    session, chat_id, msg.from_user.id, msg.text or ""
-                )
                 await add_voice_to_message(session, chat_message.id, msg.voice.file_id)
             if msg.document:
                 documents.append(msg.document.file_id)
-                chat_message = await add_message(
-                    session, chat_id, msg.from_user.id, msg.text or ""
-                )
                 await add_document_to_message(
                     session, chat_message.id, msg.document.file_id
                 )
-            if msg.text:
-                full_text = msg.text
-                await add_message(session, chat_id, msg.from_user.id, msg.text)
             if msg.photo:
                 largest_photo = msg.photo[-1]
                 photos.append(largest_photo.file_id)
-                chat_message = await add_message(
-                    session, chat_id, msg.from_user.id, msg.text or ""
-                )
                 await add_photo_to_message(
                     session, chat_message.id, largest_photo.file_id
                 )
             if msg.video:
                 videos.append(msg.video.file_id)
-                chat_message = await add_message(
-                    session, chat_id, msg.from_user.id, msg.text or ""
-                )
                 await add_video_to_message(session, chat_message.id, msg.video.file_id)
+            if msg.text:
+                full_text = msg.text
 
         try:
             product_name = await get_product_name(session, int(chat.product_id))
             media_group = []
+
             if full_text:
                 full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}:\n\n{full_text}"
-
+            else:
+                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (фото)"
             if photos:
                 media_group.append(InputMediaPhoto(media=photos[0], caption=full_text))
                 media_group += [InputMediaPhoto(media=p) for p in photos[1:]]
@@ -194,24 +188,22 @@ async def chat(
 
             if media_group:
                 await message.bot.send_media_group(int(recipient_id), media_group)
-            else:
+            elif full_text:
                 await message.bot.send_message(int(recipient_id), full_text)
 
         except TelegramForbiddenError:
             logger.warning(
-                f"Пользователь {recipient_id} заблокировал бота или удалил аккаунт."
+                f"Пользователь {sender_id} заблокировал бота или удалил аккаунт."
             )
-            await mark_chat_as_inactive(
-                session, chat_id
-            )  # Функция пометит чат как закрытый
+            await mark_chat_as_inactive(session, chat_id)
             await message.answer(
                 "❌ Пользователь недоступен (возможно, заблокировал бота). Чат закрыт."
             )
         except TelegramBadRequest as e:
-            logger.error(f"Ошибка при отправке сообщения {recipient_id}: {e}")
+            logger.error(f"Ошибка при отправке сообщения {sender_id}: {e}")
         except Exception as e:
             logger.error(
-                f"Не удалось отправить сообщение пользователю {recipient_id}: {e}"
+                f"Не удалось отправить сообщение пользователю {sender_id}: {e}"
             )
 
         await message.answer(
@@ -288,9 +280,17 @@ async def exit_for_chat(callback: CallbackQuery, state: FSMContext):
 
 @router.message(Command("my_chats"))
 async def my_chats(message: Message):
-    user_id = message.from_user.id
-
     async with db_helper.session_factory() as session:
+        # получаем пользователя из базы по Telegram ID
+        user = await session.scalar(
+            select(User).where(User.telegram_id == message.from_user.id)
+        )
+        if not user:
+            await message.answer("❌ Вы не зарегистрированы в системе.")
+            return
+
+        user_id = user.id  # используем user.id из базы
+
         chats = await get_user_chats(session, user_id)
 
         if not chats:
@@ -309,11 +309,8 @@ async def my_chats(message: Message):
                     )
                 ]
             )
-            # каждая кнопка в отдельном списке, чтобы была на своей строке
 
-        # создаём клавиатуру с кнопками
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
-
         await message.answer("💬 Ваши чаты:", reply_markup=kb)
 
 
@@ -326,6 +323,7 @@ async def open_chat(callback: CallbackQuery, state: FSMContext):
         user = await session.scalar(
             select(User).where(User.telegram_id == callback.from_user.id)
         )
+
         if not user:
             await callback.message.answer("❌ Вы не зарегистрированы в системе.")
             return
@@ -337,6 +335,9 @@ async def open_chat(callback: CallbackQuery, state: FSMContext):
             return
 
         # Проверяем, что пользователь — участник чата
+        print(user_id)
+        print(chat.buyer.id)
+        print(chat.seller.id)
         if user_id not in [chat.buyer.id, chat.seller.id]:
             await callback.message.answer("❌ Вы не участник этого чата.")
             return

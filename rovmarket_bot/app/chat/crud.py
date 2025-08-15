@@ -1,4 +1,5 @@
 from sqlalchemy import and_
+from sqlalchemy.orm import selectinload
 
 from rovmarket_bot.core.models import (
     db_helper,
@@ -57,7 +58,11 @@ async def create_or_get_chat(session, product_id, buyer_id, seller_id):
 
 
 async def get_chat_by_id(session: AsyncSession, chat_id: int) -> Optional[Chat]:
-    stmt = select(Chat).where(Chat.id == chat_id)
+    stmt = (
+        select(Chat)
+        .options(selectinload(Chat.seller), selectinload(Chat.buyer))
+        .where(Chat.id == chat_id)
+    )
     result = await session.execute(stmt)
     return result.scalars().first()
 
@@ -77,6 +82,13 @@ async def get_chat_by_product_and_buyer(
 async def add_message(
     session: AsyncSession, chat_id: int, sender_id: int, text: str
 ) -> ChatMessage:
+    # Проверяем существование пользователя
+    print(sender_id)
+    result = await session.execute(select(User).where(User.id == sender_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise ValueError(f"User with id {sender_id} does not exist")
+
     message = ChatMessage(chat_id=chat_id, sender_id=sender_id, text=text)
     session.add(message)
     await session.commit()
@@ -173,6 +185,21 @@ async def add_video_to_message(
     await session.commit()
     await session.refresh(video)
     return video
+
+
+async def get_telegram_id_by_user_id(
+    session: AsyncSession, user_id: int
+) -> Optional[int]:
+    """
+    Получает telegram_id пользователя по его user.id.
+
+    :param session: AsyncSession SQLAlchemy
+    :param user_id: ID пользователя в базе
+    :return: telegram_id или None, если пользователь не найден
+    """
+    result = await session.execute(select(User.telegram_id).where(User.id == user_id))
+    telegram_id = result.scalar_one_or_none()
+    return telegram_id
 
 
 async def add_sticker_to_message(
