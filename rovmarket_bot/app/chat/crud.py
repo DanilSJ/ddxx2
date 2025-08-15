@@ -113,7 +113,6 @@ async def get_user_chats(session: AsyncSession, user_id: int):
     return chats if chats else None
 
 
-
 async def get_product_name(session: AsyncSession, product_id: int) -> str:
     """
     Получает название товара по его ID
