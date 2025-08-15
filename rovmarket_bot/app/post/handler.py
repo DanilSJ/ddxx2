@@ -389,15 +389,6 @@ async def process_price(message: Message, state: FSMContext):
 
     await state.update_data(price=price)
 
-    await message.answer(
-        "📞 Пожалуйста, отправьте ваши контактные данные:\n\n"
-        "— Номер телефона (начиная с `+7`, `+380` или `+8`)\n"
-        "— Email (например, `example@mail.com`)\n"
-        "— Telegram username (начиная с `@`, например `@username`)\n"
-        "— Связаться через бота (анонимный чат)\n\n"
-        "Чтобы быстро поделиться номером, нажмите кнопку «📱 Отправить номер телефона» ниже 👇",
-        reply_markup=contact,
-    )
     await state.set_state(Post.contact)
 
 
@@ -444,7 +435,7 @@ async def process_contact(message: Message, state: FSMContext):
         raw = message.text.strip()
         # Если выбрана кнопка "Связаться через бота" — сохраняем как контакт без проверки
         if raw == "Связаться через бота":
-            await state.update_data(contact="Связаться через бота")
+            await state.update_data(contact="via_bot")
         else:
             cleaned = await clean_phone(raw) if raw.startswith("+") else raw
 
@@ -457,7 +448,8 @@ async def process_contact(message: Message, state: FSMContext):
                     "Пожалуйста, отправьте один из следующих вариантов:\n"
                     "• Телефон (начиная с `+7`, `+380` или `+8`, например `+79591166234`)\n"
                     "• Email (например, `example@mail.com`)\n"
-                    "• Telegram username (начиная с `@`, например `@yourname`)")
+                    "• Telegram username (начиная с `@`, например `@yourname`)"
+                )
                 return
 
             await state.update_data(contact=cleaned)

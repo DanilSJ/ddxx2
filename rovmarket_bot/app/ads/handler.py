@@ -826,6 +826,8 @@ async def edit_contact(message: Message, state: FSMContext):
         await send_category_page(message, state, page=1)
         await state.set_state(EditProductState.waiting_category)
         return
+    elif message.text == "Связаться через бота":
+        contact_value = "via_bot"  # особое значение для анонимного чата
     else:
         if message.contact:
             contact_value = message.contact.phone_number
@@ -833,13 +835,18 @@ async def edit_contact(message: Message, state: FSMContext):
             raw = message.text.strip()
             cleaned = await clean_phone(raw) if raw.startswith("+") else raw
 
-            if not re.match(CONTACT_REGEX, cleaned):
+            if (
+                not re.match(CONTACT_REGEX, cleaned)
+                and not cleaned.startswith("@")
+                and "@" not in cleaned
+            ):
                 await message.answer(
                     "❌ Неверный формат контактных данных.\n\n"
                     "Введите один из вариантов:\n"
                     "• Телефон (`+7`, `+380`, `+8`)\n"
                     "• Email (`example@mail.com`)\n"
-                    "• Telegram (`@username`)"
+                    "• Telegram (`@username`)\n"
+                    "• Связаться через бота (анонимный чат)"
                 )
                 return
             contact_value = cleaned
@@ -888,10 +895,16 @@ async def edit_contact(message: Message, state: FSMContext):
 
     if updated_product:
         await invalidate_all_ads_cache()
-        await message.answer(
-            "✅ Объявление успешно обновлено!\n\nТеперь его увидят другие пользователи 📢",
-            reply_markup=menu_start,
-        )
+        if contact_value == "via_bot":
+            await message.answer(
+                "✅ Объявление успешно обновлено!\n\nТеперь пользователи смогут связаться с вами через анонимный чат 🤖",
+                reply_markup=menu_start,
+            )
+        else:
+            await message.answer(
+                "✅ Объявление успешно обновлено!\n\nТеперь его увидят другие пользователи 📢",
+                reply_markup=menu_start,
+            )
     else:
         await message.answer(
             "❌ Произошла ошибка при обновлении объявления. Попробуйте ещё раз.",

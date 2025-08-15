@@ -393,7 +393,7 @@ async def show_details(callback: CallbackQuery):
     ]
     # Если контакт анонимный — добавить кнопку чата
 
-    if contact == "Связаться через бота":
+    if contact == "via_bot":
         details_buttons.insert(0, [])
     details_markup = InlineKeyboardMarkup(inline_keyboard=details_buttons)
 
