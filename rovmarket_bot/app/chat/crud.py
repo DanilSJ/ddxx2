@@ -20,27 +20,25 @@ from rovmarket_bot.core.models.chat_voice import ChatVoice
 
 
 async def create_or_get_chat(session, product_id, buyer_id, seller_id):
-    try:
-        chat = await session.execute(
-            select(Chat).where(
-                Chat.product_id == product_id,
-                Chat.buyer_id == buyer_id,
-                Chat.seller_id == seller_id,
-            )
+
+    chat = await session.execute(
+        select(Chat).where(
+            Chat.product_id == product_id,
+            Chat.buyer_id == buyer_id,
+            Chat.seller_id == seller_id,
         )
-        chat = chat.scalar_one_or_none()
-        if not chat:
-            chat = Chat(product_id=product_id, buyer_id=buyer_id, seller_id=seller_id)
-            session.add(chat)
-            try:
-                await session.commit()
-            except Exception as e:
-                await session.rollback()
-                print("Ошибка при коммите:", e)
-                raise
-        return chat
-    except Exception as e:
-        print(e)
+    )
+    chat = chat.scalar_one_or_none()
+    if not chat:
+        chat = Chat(product_id=product_id, buyer_id=buyer_id, seller_id=seller_id)
+        session.add(chat)
+        try:
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            print("Ошибка при коммите:", e)
+            raise
+    return chat
 
 
 async def get_chat_by_id(session: AsyncSession, chat_id: int) -> Optional[Chat]:
