@@ -337,7 +337,7 @@ async def open_chat(callback: CallbackQuery, state: FSMContext):
             return
 
         # Проверяем, что пользователь — участник чата
-        if user_id not in [chat.buyer_id, chat.seller_id]:
+        if user_id not in [chat.buyer.id, chat.seller.id]:
             await callback.message.answer("❌ Вы не участник этого чата.")
             return
 
