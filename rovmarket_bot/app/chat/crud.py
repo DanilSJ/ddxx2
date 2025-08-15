@@ -27,18 +27,19 @@ async def create_or_get_chat(session, product_id, buyer_id, seller_id):
             Chat.seller_id == seller_id,
         )
     )
-    print(chat)
-    print(chat.id)
-    # chat = chat.scalar_one_or_none()
-    # if not chat:
-    #     chat = Chat(product_id=product_id, buyer_id=buyer_id, seller_id=seller_id)
-    #     session.add(chat)
-    #     try:
-    #         await session.commit()
-    #     except Exception as e:
-    #         await session.rollback()
-    #         print("Ошибка при коммите:", e)
-    #         raise
+
+    chat = chat.scalar_one_or_none()
+    if not chat:
+        chat = Chat(product_id=product_id, buyer_id=buyer_id, seller_id=seller_id)
+        session.add(chat)
+
+        try:
+            await session.commit()
+            await session.refresh(chat)
+        except Exception as e:
+            await session.rollback()
+            print("Ошибка при коммите:", e)
+            raise
     return chat
 
 
