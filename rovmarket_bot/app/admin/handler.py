@@ -186,17 +186,21 @@ async def start_broadcast(callback: CallbackQuery, state: FSMContext):
 @router.message(
     BroadcastStates.waiting_for_text,
     ~F.text.startswith("/"),
-    F.text != "🔔 Уведомления",
-    F.text != "📋 Меню",
-    F.text != "📱 Отправить номер телефона",
-    F.text != "🔙 Назад",
-    F.text != "🔍 Показать все",
-    F.text != "🎛 Фильтры",
-    F.text != "📂 Категории",
-    F.text != "⚙️ Настройки",
-    F.text != "📋 Мои объявления",
-    F.text != "📢 Разместить объявление",
-    F.text != "🔍 Найти объявление",
+    F.text.not_in(
+        [
+            "🔔 Уведомления",
+            "📋 Меню",
+            "📱 Отправить номер телефона",
+            "🔙 Назад",
+            "🔍 Показать все",
+            "🎛 Фильтры",
+            "📂 Категории",
+            "⚙️ Настройки",
+            "📋 Мои объявления",
+            "📢 Разместить объявление",
+            "🔍 Найти объявление",
+        ]
+    ),
 )
 async def send_broadcast(message: Message, state: FSMContext):
     text = message.text
@@ -206,6 +210,9 @@ async def send_broadcast(message: Message, state: FSMContext):
         users = await get_all_users(session)
 
     success_count = 0
+    blocked_count = 0
+    blocked_users = []
+
     for user in users:
         try:
             await message.bot.send_message(
@@ -214,14 +221,28 @@ async def send_broadcast(message: Message, state: FSMContext):
                 parse_mode="Markdown",
             )
             success_count += 1
-        except Exception as e:
-            print(e)
-            pass
+        except Exception:
+            blocked_count += 1
+            if user.username:
+                blocked_users.append(f"@{user.username} ({user.telegram_id})")
+            else:
+                blocked_users.append(str(user.telegram_id))
 
+    # Итоговое сообщение
     await message.answer(
-        f"📬 Рассылка завершена!\nСообщение доставлено {success_count} пользователям.",
+        f"📬 Рассылка завершена!\n"
+        f"Сообщение доставлено: {success_count}\n"
+        f"Не удалось отправить: {blocked_count}",
         reply_markup=menu_back,
     )
+
+    if blocked_users:
+        blocked_text = "🚫 Заблокировали бота:\n" + "\n".join(
+            html.escape(u) for u in blocked_users
+        )
+        chunk_size = 4000
+        for i in range(0, len(blocked_text), chunk_size):
+            await message.answer(blocked_text[i : i + chunk_size], parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("all_users"))
