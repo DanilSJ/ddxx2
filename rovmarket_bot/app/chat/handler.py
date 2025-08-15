@@ -298,6 +298,7 @@ async def my_chats(message: Message):
     async with db_helper.session_factory() as session:
         await message.answer("xxxx")
         chats = await get_user_chats(session, user_id)
+        await message.answer(chats)
         await message.answer("zzzz")
         if not chats:
             await message.answer("❌ У вас пока нет чатов.")
