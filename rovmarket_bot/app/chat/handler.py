@@ -1,6 +1,7 @@
 import time
 
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters import Command
@@ -29,6 +30,7 @@ from rovmarket_bot.app.chat.crud import (
     get_last_messages,
     add_sticker_to_message,
     mark_chat_as_inactive,
+    get_product_name,
 )
 from rovmarket_bot.core.models import db_helper, Product, User
 
@@ -41,9 +43,6 @@ class ChatState(StatesGroup):
 
 
 # Ожидается, что chat_id будет в state, когда пользователь пишет в анонимный чат
-
-
-from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
 
 @router.message(
@@ -150,9 +149,10 @@ async def chat(
                 await add_video_to_message(session, chat_message.id, msg.video.file_id)
 
         try:
+            product_name = await get_product_name(session, int(chat.product_id))
             media_group = []
             if full_text:
-                full_text = f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id}:\n\n{full_text}"
+                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}:\n\n{full_text}"
 
             if photos:
                 media_group.append(InputMediaPhoto(media=photos[0], caption=full_text))
@@ -164,7 +164,7 @@ async def chat(
             if stickers:
                 await message.bot.send_message(
                     int(recipient_id),
-                    f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (стикеры)",
+                    f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (стикеры)",
                 )
                 for st in stickers:
                     await message.bot.send_sticker(int(recipient_id), st)
@@ -173,21 +173,21 @@ async def chat(
                 await message.bot.send_audio(
                     int(recipient_id),
                     au,
-                    caption=f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (аудио)",
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (аудио)",
                 )
 
             for vc in voices:
                 await message.bot.send_voice(
                     int(recipient_id),
                     vc,
-                    caption=f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (голосовое)",
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (голосовое)",
                 )
 
             for doc in documents:
                 await message.bot.send_document(
                     int(recipient_id),
                     doc,
-                    caption=f"💬 Новое сообщение от {sender_type} по объявлению #{chat.product_id} (файлы)",
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (файлы)",
                 )
 
             if media_group:
@@ -252,10 +252,11 @@ async def start_anonymous_chat(callback: CallbackQuery, state: FSMContext):
 
         # Здесь устанавливаем состояние ChatState.chatting
         await state.set_state(ChatState.chatting)
+    product_name = await get_product_name(session, int(product_id))
 
     # Подтверждаем пользователю
     await callback.message.answer(
-        f"💬 Анонимный чат по объявлению #{product_id} начат.\n"
+        f"💬 Анонимный чат по объявлению {product_name} начат.\n"
         f"Пишите сообщение прямо сюда, и оно будет отправлено продавцу."
     )
 
