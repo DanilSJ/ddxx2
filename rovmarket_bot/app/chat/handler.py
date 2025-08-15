@@ -296,6 +296,7 @@ async def my_chats(message: Message):
     user_id = message.from_user.id
 
     async with db_helper.session_factory() as session:
+        await message.answer("xxxx")
         chats = await get_user_chats(session, user_id)
         await message.answer("zzzz")
         if not chats:
