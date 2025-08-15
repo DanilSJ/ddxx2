@@ -399,18 +399,19 @@ async def show_details(callback: CallbackQuery):
                 text="Пожаловаться", callback_data=f"complaint:{product_id}"
             )
         ],
-        [
-            InlineKeyboardButton(
-                text="Начать чат", callback_data=f"start_chat:{product_id}"
-            )
-        ],
     ]
     # Если контакт анонимный — добавить кнопку чата
 
     if contact == "via_bot":
-        details_buttons.insert(0, [])
-    details_markup = InlineKeyboardMarkup(inline_keyboard=details_buttons)
+        details_buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="Начать чат", callback_data=f"start_chat:{product_id}"
+                )
+            ]
+        )
 
+    details_markup = InlineKeyboardMarkup(inline_keyboard=details_buttons)
     try:
         if photos:
             media = InputMediaPhoto(
