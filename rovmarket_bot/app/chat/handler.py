@@ -294,10 +294,10 @@ async def exit_for_chat(callback: CallbackQuery, state: FSMContext):
 @router.message(Command("my_chats"))
 async def my_chats(message: Message):
     user_id = message.from_user.id
-    await message.answer("dw")
+
     async with db_helper.session_factory() as session:
         chats = await get_user_chats(session, user_id)
-
+        await message.answer("zzzz")
         if not chats:
             await message.answer("❌ У вас пока нет чатов.")
             return
