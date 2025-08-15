@@ -24,7 +24,7 @@ async def create_or_get_chat(session, product_id, buyer_id, seller_id):
         select(Chat).where(
             Chat.product_id == product_id,
             Chat.buyer_id == buyer_id,
-            Chat.seller_id == seller_id
+            Chat.seller_id == seller_id,
         )
     )
     chat = chat.scalar_one_or_none()

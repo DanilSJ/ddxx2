@@ -21,6 +21,10 @@ class Chat(Base):
         nullable=False,
     )
 
+    # relationships к пользователям
+    buyer = relationship("User", foreign_keys=[buyer_id], backref="chats_as_buyer")
+    seller = relationship("User", foreign_keys=[seller_id], backref="chats_as_seller")
+
     messages = relationship(
         "ChatMessage", back_populates="chat", cascade="all, delete-orphan"
     )
@@ -35,6 +39,8 @@ class ChatMessage(Base):
     sender_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     text: Mapped[str] = mapped_column(String, nullable=False)
 
+    sender = relationship("User", backref="messages_sent")
+    chat = relationship("Chat", back_populates="messages")
     photos = relationship(
         "ChatPhoto",
         back_populates="chat",
