@@ -19,26 +19,24 @@ from rovmarket_bot.core.models.chat_document import ChatDocument
 from rovmarket_bot.core.models.chat_voice import ChatVoice
 
 
-async def create_or_get_chat(
-    session: AsyncSession, product_id: int, buyer_id: int, seller_id: int
-) -> Chat:
-    stmt = select(Chat).where(
-        and_(
+async def create_or_get_chat(session, product_id, buyer_id, seller_id):
+    chat = await session.execute(
+        select(Chat).where(
             Chat.product_id == product_id,
             Chat.buyer_id == buyer_id,
-            Chat.seller_id == seller_id,
-            Chat.is_active.is_(True),
+            Chat.seller_id == seller_id
         )
     )
-
-    result = await session.execute(stmt)
-    chat = result.scalars().first()
-    if chat:
-        return chat
-    chat = Chat(product_id=product_id, buyer_id=buyer_id, seller_id=seller_id)
-    session.add(chat)
-    await session.commit()
-    await session.refresh(chat)
+    chat = chat.scalar_one_or_none()
+    if not chat:
+        chat = Chat(product_id=product_id, buyer_id=buyer_id, seller_id=seller_id)
+        session.add(chat)
+        try:
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            print("Ошибка при коммите:", e)
+            raise
     return chat
 
 
