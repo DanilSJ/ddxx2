@@ -82,8 +82,7 @@ async def get_chat_by_product_and_buyer(
 async def add_message(
     session: AsyncSession, chat_id: int, sender_id: int, text: str
 ) -> ChatMessage:
-    # Проверяем существование пользователя
-    print(sender_id)
+
     result = await session.execute(select(User).where(User.id == sender_id))
     user = result.scalar_one_or_none()
     if not user:
