@@ -374,11 +374,13 @@ async def show_details(callback: CallbackQuery):
     else:
         geo_text = "-"
 
+    contact_text = "Связь через бота" if contact == "via_bot" else contact
+
     full_text = (
         f"📌 {name}\n"
         f"💬 {desc}\n"
         f"💰 Цена: {price}\n"
-        f"\n📞 Контакт: {contact}\n"
+        f"\n📞 Контакт: {contact_text}\n"
         f"📍 Геолокация: {geo_text}\n"
         f"🕒 Дата создания: {created_str}"
     )
@@ -486,11 +488,13 @@ async def show_photos(callback: CallbackQuery):
     else:
         geo_text = "-"
 
+    contact_text = "Связь через бота" if contact == "via_bot" else contact
+
     full_text = (
         f"📌 {name}\n"
         f"💬 {desc}\n"
         f"💰 Цена: {price}\n"
-        f"\n📞 Контакт: {contact}\n"
+        f"\n📞 Контакт: {contact_text}\n"
         f"📍 Геолокация: {geo_text}\n"
         f"🕒 Дата создания: {created_str}"
     )
