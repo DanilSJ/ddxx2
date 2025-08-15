@@ -147,13 +147,13 @@ async def chat(
             media_group = []
 
             if full_text:
-                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (Chat ID: {chat_id}):\n\n{full_text}"
+                full_text = f"💬 Новое сообщение от {sender_type} по объявлению {product_name}:\n\n{full_text}"
 
             if photos:
                 media_group.append(
                     InputMediaPhoto(
                         media=photos[0],
-                        caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (фото, Chat ID: {chat_id})",
+                        caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}({chat.buyer_id}) (фото)",
                     )
                 )
                 media_group += [InputMediaPhoto(media=p) for p in photos[1:]]
@@ -161,7 +161,7 @@ async def chat(
                 media_group.append(
                     InputMediaVideo(
                         media=videos[0],
-                        caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (видео, Chat ID: {chat_id})",
+                        caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}({chat.buyer_id}) (видео)",
                     )
                 )
                 media_group += [InputMediaVideo(media=v) for v in videos[1:]]
@@ -169,7 +169,7 @@ async def chat(
             if stickers:
                 await message.bot.send_message(
                     int(recipient_id),
-                    f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (стикеры, Chat ID: {chat_id})",
+                    f"💬 Новое сообщение от {sender_type} по объявлению {product_name}({chat.buyer_id}) (стикеры)",
                 )
                 for st in stickers:
                     await message.bot.send_sticker(int(recipient_id), st)
@@ -178,21 +178,21 @@ async def chat(
                 await message.bot.send_audio(
                     int(recipient_id),
                     au,
-                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (аудио, Chat ID: {chat_id})",
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}({chat.buyer_id}) (аудио)",
                 )
 
             for vc in voices:
                 await message.bot.send_voice(
                     int(recipient_id),
                     vc,
-                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (голосовое, Chat ID: {chat_id})",
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}({chat.buyer_id}) (голосовое)",
                 )
 
             for doc in documents:
                 await message.bot.send_document(
                     int(recipient_id),
                     doc,
-                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name} (файлы, Chat ID: {chat_id})",
+                    caption=f"💬 Новое сообщение от {sender_type} по объявлению {product_name}({chat.buyer_id}) (файлы)",
                 )
 
             if media_group:
