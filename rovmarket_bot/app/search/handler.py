@@ -100,6 +100,11 @@ async def cmd_categories(message: Message, state: FSMContext):
     await button_categories(message, state)
 
 
+@router.callback_query(F.data == "menu_start_inline_search_ads")
+async def menu_start_inline_search_ads(callback: CallbackQuery, state: FSMContext):
+    await button_search(callback.message, state)
+
+
 @router.message(F.text == "🔍 Найти объявление")
 async def button_search(message: Message, state: FSMContext):
     await state.clear()

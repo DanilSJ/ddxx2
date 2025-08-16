@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from rovmarket_bot.app.chat.keyboard import menu_chat
-from rovmarket_bot.app.start.keyboard import menu_start
+from rovmarket_bot.app.start.keyboard import menu_start, menu_start_inline
 from rovmarket_bot.core.logger import get_component_logger
 from rovmarket_bot.app.chat.crud import (
     create_or_get_chat,
@@ -303,7 +303,10 @@ async def my_chats(message: Message):
         chats = await get_user_chats(session, user_id)
 
         if not chats:
-            await message.answer("❌ У вас пока нет чатов.")
+            await message.answer(
+                "❌ У вас пока нет чатов.",
+                reply_markup=menu_start_inline,
+            )
             return
 
         # формируем список кнопок с порядковым номером
@@ -325,6 +328,7 @@ async def my_chats(message: Message):
 
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
         await message.answer("💬 Ваши чаты:", reply_markup=kb)
+        await message.answer("Главное меню 📋", reply_markup=menu_start_inline)
 
 
 @router.callback_query(F.data.startswith("chat_"))
@@ -437,6 +441,11 @@ async def open_chat(callback: CallbackQuery, state: FSMContext):
     chat_messages = (await state.get_data()).get("chat_messages", [])
     chat_messages.append(sent_msg.message_id)
     await state.update_data(chat_messages=chat_messages)
+
+
+@router.callback_query(F.data == "menu_start_inline_my_chats")
+async def menu_start_inline_my_chats(callback: CallbackQuery, state: FSMContext):
+    await my_chats(callback.message)
 
 
 @router.message(F.text == "👥 Мои чаты")

@@ -39,6 +39,11 @@ async def cmd_settings(message: Message, state: FSMContext):
     await button_settings(message, state)
 
 
+@router.callback_query(F.data == "menu_start_inline_settings")
+async def menu_start_inline_settings(callback: CallbackQuery, state: FSMContext):
+    await button_settings(callback.message, state)
+
+
 @router.message(F.text == "⚙️ Настройки")
 async def button_settings(message: Message, state: FSMContext):
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")

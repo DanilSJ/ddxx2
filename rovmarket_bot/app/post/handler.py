@@ -77,6 +77,11 @@ async def cmd_post(message: Message, state: FSMContext):
     await button_post(message=message, state=state)
 
 
+@router.callback_query(F.data == "menu_start_inline_post_ads")
+async def menu_start_inline_post_ads(callback: CallbackQuery, state: FSMContext):
+    await button_post(callback.message, state)
+
+
 @router.message(F.text == "📢 Разместить объявление")
 async def button_post(message: Message, state: FSMContext):
     logger.info("User_id=%s started posting flow", message.from_user.id)

@@ -21,7 +21,7 @@ from rovmarket_bot.app.ads.keyboard import (
     menu_skip_back_contact,  # добавлен импорт
 )
 from rovmarket_bot.app.post.crud import get_categories_page
-from rovmarket_bot.app.start.keyboard import menu_start
+from rovmarket_bot.app.start.keyboard import menu_start, menu_start_inline
 from rovmarket_bot.core.cache import check_rate_limit, invalidate_all_ads_cache
 from rovmarket_bot.core.models import db_helper, Categories
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -80,6 +80,11 @@ async def cmd_my_ads(message: Message, state: FSMContext):
     await button_my_ads(message, state)
 
 
+@router.callback_query(F.data == "menu_start_inline_my_ads")
+async def menu_start_inline_my_ads(callback: CallbackQuery, state: FSMContext):
+    await button_my_ads(callback.message, state)
+
+
 @router.message(F.text == "📋 Мои объявления")
 async def button_my_ads(message: Message, state: FSMContext):
     allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
@@ -106,7 +111,10 @@ async def button_my_ads(message: Message, state: FSMContext):
         )
 
     if not products:
-        await message.answer("У вас пока нет объявлений.")
+        await message.answer(
+            "У вас пока нет активных объявлений 📭",
+            reply_markup=menu_start_inline,
+        )
         return
 
     # Сохраняем текущую страницу в состоянии
@@ -297,7 +305,10 @@ async def close_ads_view(callback: CallbackQuery, state: FSMContext):
             pass  # Если сообщение уже удалено или ошибка - игнорируем
 
     await state.clear()
-    await callback.message.answer("Просмотр объявлений закрыт")
+    await callback.message.answer(
+        "Просмотр объявлений завершён ✅",
+        reply_markup=menu_start_inline,
+    )
 
 
 @router.callback_query(F.data == "current_page")
