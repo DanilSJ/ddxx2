@@ -24,6 +24,7 @@ import datetime
 from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
 from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
+from ..start.keyboard import menu_start
 
 router = Router()
 logger = get_component_logger("search")
@@ -128,6 +129,36 @@ async def menu_search_inline_filter_ads(callback: CallbackQuery, state: FSMConte
 @router.callback_query(F.data == "menu_search_inline_categories_ads")
 async def menu_search_inline_categories_ads(callback: CallbackQuery, state: FSMContext):
     await button_categories(callback.message, state)
+
+
+@router.callback_query(F.data == "menu_search_inline_menu")
+async def menu_search_inline_menu(callback: CallbackQuery, state: FSMContext):
+    message = callback.message
+
+    await state.clear()
+
+    await message.answer(
+        """Привет! 👋
+<b>Добро пожаловать в РовенМаркет</b> — маркетплейс прямо в Telegram.
+
+Здесь ты можешь:
+🛒 <b>Купить или продать любой товар</b>  
+📸 <b>Добавить объявление за пару кликов</b>  
+📍 <b>Смотреть предложения в своём районе</b>  
+🔔 <b>Получать уведомления о новых товарах</b>  
+💬 <b>Общаться анонимно через бота — не нужно указывать свои контакты в объявлении</b>
+
+Ты также можешь нажать на команды в тексте или написать:  
+/all_ads — чтобы посмотреть все объявления  
+/post — чтобы опубликовать своё объявление
+
+<b>Готов начать?</b>
+
+Выбери действие из меню ниже или нажми /help для справки.
+    """,
+        parse_mode="HTML",
+        reply_markup=menu_start,
+    )
 
 
 @router.message(F.text == "🔍 Показать все")

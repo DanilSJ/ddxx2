@@ -26,17 +26,25 @@ menu_search_inline = InlineKeyboardMarkup(
     inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="🔍 Показать все", callback_data="menu_search_inline_all_ads"
+                text="🔍 Показать все",
+                callback_data="menu_search_inline_all_ads",
             ),
         ],
         [
             InlineKeyboardButton(
-                text="🎛 Фильтры", callback_data="menu_search_inline_filter_ads"
+                text="🎛 Фильтры",
+                callback_data="menu_search_inline_filter_ads",
             ),
         ],
         [
             InlineKeyboardButton(
-                text="📂 Категории", callback_data="menu_search_inline_categories_ads"
+                text="📂 Категории",
+                callback_data="menu_search_inline_categories_ads",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 Меню", callback_data="menu_search_inline_menu"
             ),
         ],
     ],
@@ -97,7 +105,12 @@ def get_menu_page(page: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="➡️", callback_data=f"page_inline_button:{page+1}"  # увеличение
                 ),
-            ]
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📋 Меню", callback_data="menu_search_inline_menu"
+                ),
+            ],
         ]
     )
     return menu_pagination_inline
