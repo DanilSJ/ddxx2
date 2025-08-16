@@ -445,7 +445,7 @@ async def open_chat(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "menu_start_inline_my_chats")
 async def menu_start_inline_my_chats(callback: CallbackQuery, state: FSMContext):
-    await my_chats(callback.message)
+    await button_my_chats(callback.message, state)
 
 
 @router.message(F.text == "👥 Мои чаты")
