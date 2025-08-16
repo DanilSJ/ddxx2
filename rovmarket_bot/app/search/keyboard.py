@@ -22,6 +22,27 @@ menu_search = ReplyKeyboardMarkup(
     resize_keyboard=True,
 )
 
+menu_search_inline = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🔍 Показать все", callback_data="menu_search_inline_all_ads"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="🎛 Фильтры", callback_data="menu_search_inline_filter_ads"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📂 Категории", callback_data="menu_search_inline_categories_ads"
+            ),
+        ],
+    ],
+    resize_keyboard=True,
+)
+
 pagination_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="⬅️"), KeyboardButton(text="➡️")],

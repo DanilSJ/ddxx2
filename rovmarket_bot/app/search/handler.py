@@ -16,6 +16,7 @@ from .keyboard import (
     build_filter_options_keyboard,
     build_filter_pagination_keyboard,
     get_menu_page,
+    menu_search_inline,
 )
 from .redis_search import search_in_redis
 from rovmarket_bot.core.models import db_helper
@@ -23,7 +24,6 @@ import datetime
 from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
 from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
-
 
 router = Router()
 logger = get_component_logger("search")
@@ -105,9 +105,29 @@ async def button_search(message: Message, state: FSMContext):
     await state.set_state(Search.text)
 
     await message.answer(
-        "Напишите текст для поиска. Или выберите кнопки", reply_markup=menu_search
+        "✍️ Введите текст для поиска или воспользуйтесь меню ниже:",
+        reply_markup=menu_search,
+    )
+    await message.answer(
+        "👇 Выберите действие:",
+        reply_markup=menu_search_inline,
     )
     logger.info("Search flow started for user_id=%s", message.from_user.id)
+
+
+@router.callback_query(F.data == "menu_search_inline_all_ads")
+async def menu_search_inline_all_ads(callback: CallbackQuery, state: FSMContext):
+    await button_all(callback.message, state)
+
+
+@router.callback_query(F.data == "menu_search_inline_filter_ads")
+async def menu_search_inline_filter_ads(callback: CallbackQuery, state: FSMContext):
+    await button_filters(callback.message, state)
+
+
+@router.callback_query(F.data == "menu_search_inline_categories_ads")
+async def menu_search_inline_categories_ads(callback: CallbackQuery, state: FSMContext):
+    await button_categories(callback.message, state)
 
 
 @router.message(F.text == "🔍 Показать все")
