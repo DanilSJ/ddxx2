@@ -24,7 +24,7 @@ import datetime
 from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
 from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
-from ..start.keyboard import menu_start
+from ..start.keyboard import menu_start, menu_ad_inline_write
 
 router = Router()
 logger = get_component_logger("search")
@@ -119,6 +119,30 @@ async def button_search(message: Message, state: FSMContext):
         reply_markup=menu_search_inline,
     )
     logger.info("Search flow started for user_id=%s", message.from_user.id)
+
+
+@router.message(F.text == "📣 Реклама")
+async def button_search(message: Message, state: FSMContext):
+    await state.clear()
+    text = (
+        "✨ **Реклама в нашем боте** ✨\n\n"
+        "🔹 Хотите рассказать о своём товаре или услуге нашей аудитории?\n"
+        "🔹 Получите прямой доступ к активным пользователям.\n\n"
+        "📬 Свяжитесь со мной для обсуждения условий размещения рекламы:"
+    )
+    await message.answer(text, reply_markup=menu_ad_inline_write, parse_mode="Markdown")
+
+
+@router.callback_query(F.data == "menu_ad_inline_write_callback")
+async def button_search(message: Message, state: FSMContext):
+    await state.clear()
+    text = (
+        "✨ **Реклама в нашем боте** ✨\n\n"
+        "🔹 Хотите рассказать о своём товаре или услуге нашей аудитории?\n"
+        "🔹 Получите прямой доступ к активным пользователям.\n\n"
+        "📬 Свяжитесь со мной для обсуждения условий размещения рекламы:"
+    )
+    await message.answer(text, reply_markup=menu_ad_inline_write, parse_mode="Markdown")
 
 
 @router.callback_query(F.data == "menu_search_inline_all_ads")
