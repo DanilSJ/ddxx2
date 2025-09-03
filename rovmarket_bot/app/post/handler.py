@@ -181,6 +181,7 @@ async def process_categories(message: Message, state: FSMContext):
 
 @router.message(
     Post.name,
+    F.content_type == ContentType.TEXT,
     ~F.text.startswith("/"),
     F.text != "🔔 Уведомления",
     F.text != "📋 Меню",
@@ -195,6 +196,9 @@ async def process_categories(message: Message, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def process_name(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("⚠️ Пожалуйста, отправьте текстовое название объявления.")
+        return
     if len(message.text) > 85:
         await message.answer(
             f"⚠️ Название слишком длинное (максимум 85 символов). Сейчас: {len(message.text)}."
@@ -207,6 +211,7 @@ async def process_name(message: Message, state: FSMContext):
 
 @router.message(
     Post.description,
+    F.content_type == ContentType.TEXT,
     ~F.text.startswith("/"),
     F.text != "🔔 Уведомления",
     F.text != "📋 Меню",
@@ -221,6 +226,9 @@ async def process_name(message: Message, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def process_description(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("⚠️ Пожалуйста, отправьте текстовое описание объявления.")
+        return
     if len(message.text) > 750:
         await message.answer(
             f"⚠️ Описание слишком длинное (максимум 750 символов). Сейчас: {len(message.text)}."
@@ -340,6 +348,7 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.message(
     Post.price,
+    F.content_type == ContentType.TEXT,
     ~F.text.startswith("/"),
     F.text != "🔔 Уведомления",
     F.text != "📋 Меню",
@@ -354,6 +363,11 @@ async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
     F.text != "🔍 Найти объявление",
 )
 async def process_price(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer(
+            "❌ Некорректный формат. Введите цену цифрами или напишите «Договорная»."
+        )
+        return
     price_text = message.text.strip().lower()
 
     if price_text == "договорная":
