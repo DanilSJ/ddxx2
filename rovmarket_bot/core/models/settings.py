@@ -21,6 +21,12 @@ class BotSettings(Base):
     moderation: Mapped[bool] = mapped_column(default=True, nullable=False)
     logging: Mapped[bool] = mapped_column(default=True, nullable=False)
     notifications_all: Mapped[bool] = mapped_column(default=True, nullable=True)
+    # Pointer for rotating menu advertisements
+    menu_ad_index: Mapped[int] = mapped_column(default=0, nullable=True)
+    # Pointer for rotating broadcast advertisements
+    broadcast_ad_index: Mapped[int] = mapped_column(default=0, nullable=True)
+    # Pointer for rotating listings advertisements
+    listings_ad_index: Mapped[int] = mapped_column(default=0, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

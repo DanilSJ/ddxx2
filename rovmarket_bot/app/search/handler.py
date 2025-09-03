@@ -25,6 +25,7 @@ from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardB
 from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
 from ..start.keyboard import menu_start, menu_ad_inline_write
+from rovmarket_bot.app.advertisement.crud import get_next_listings_ad
 
 router = Router()
 logger = get_component_logger("search")
@@ -295,7 +296,7 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                         await message.answer("Нет доступных объявлений")
                         return
 
-            for pid in page_ids:
+            for idx, pid in enumerate(page_ids, start=1):
                 product_data = products.get(str(pid), {})
                 name = product_data.get("name", "Без названия")
                 desc = product_data.get("description", "Без описания")
@@ -328,6 +329,21 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                 else:
                     await message.answer(text, reply_markup=details_markup)
 
+                # Insert listings advertisement after every 3rd product
+                if idx % 3 == 0:
+                    ad = await get_next_listings_ad(session)
+                    if ad:
+                        ad_text = ad.text
+                        ad_photos = [p.file_id for p in (ad.photos or [])]
+                        try:
+                            if ad_photos:
+                                await message.answer_photo(ad_photos[0], caption=ad_text)
+                            else:
+                                await message.answer(ad_text)
+                        except Exception:
+                            # Fallback to text if photo fails
+                            await message.answer(ad_text)
+
             await message.answer(
                 f"Страница {page+1} из {((total-1)//PAGE_SIZE)+1}",
                 reply_markup=pagination_keyboard,
@@ -336,6 +352,7 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                 "Используйте кнопки для перелистывания страниц ⬅️➡️",
                 reply_markup=get_menu_page(page),
             )
+            await session.commit()
         else:
             await show_ads_page(message, state, 0)
             logger.info(

@@ -25,6 +25,9 @@ from rovmarket_bot.app.admin.handler import router as admin
 from rovmarket_bot.app.chat.handler import router as chat
 from rovmarket_bot.app.settings.handler import router as settings_router
 from rovmarket_bot.app.help.handler import router as help_router
+from rovmarket_bot.app.advertisement.handler import router as advertisement_router
+from rovmarket_bot.app.advertisement.crud import get_next_broadcast_ad
+from rovmarket_bot.app.admin.crud import get_all_users
 
 
 storage = RedisStorage.from_url(settings.REDIS_URL)
@@ -53,10 +56,58 @@ async def main():
     dp.include_router(help_router)
     dp.include_router(settings_router)
     dp.include_router(chat)
+    dp.include_router(advertisement_router)
 
     await ensure_redis_index()
+
+    async def broadcast_scheduler():
+        while True:
+            try:
+                async with db_helper.session_factory() as session:
+                    ad = await get_next_broadcast_ad(session)
+                    if ad:
+                        users = await get_all_users(session)
+                        # commit pointer advance even if sending fails later
+                        await session.commit()
+
+                        # prepare media/text
+                        text = ad.text
+                        photos = [p.file_id for p in (ad.photos or [])]
+                        sent = 0
+                        for user in users:
+                            try:
+                                if photos:
+                                    from aiogram.types import InputMediaPhoto
+
+                                    media = [InputMediaPhoto(media=photos[0], caption=text)]
+                                    for fid in photos[1:10]:
+                                        media.append(InputMediaPhoto(media=fid))
+                                    msgs = await bot.send_media_group(chat_id=user.telegram_id, media=media)
+                                    if ad.pinned and msgs:
+                                        try:
+                                            await bot.pin_chat_message(chat_id=user.telegram_id, message_id=msgs[0].message_id)
+                                        except Exception:
+                                            pass
+                                else:
+                                    msg = await bot.send_message(chat_id=user.telegram_id, text=text)
+                                    if ad.pinned:
+                                        try:
+                                            await bot.pin_chat_message(chat_id=user.telegram_id, message_id=msg.message_id)
+                                        except Exception:
+                                            pass
+                                sent += 1
+                            except Exception:
+                                # ignore per-user failures
+                                pass
+            except Exception:
+                # swallow scheduler errors; continue next tick
+                pass
+            # wait one hour
+            await asyncio.sleep(60 * 60)
+
     await asyncio.gather(
         dp.start_polling(bot),
+        broadcast_scheduler(),
     )
 
 

@@ -10,11 +10,17 @@ class Advertisement(Base):
     text: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    # Частота показа (неделя, 2 недели, месяц)
-    week: Mapped[bool] = mapped_column(Boolean, default=False)
-    two_weeks: Mapped[bool] = mapped_column(Boolean, default=False)
-    month: Mapped[bool] = mapped_column(Boolean, default=False)
-    periodicity: Mapped[int] = mapped_column(Integer, default=1)  # как часто показывать
+    # Тип рекламы: broadcast | broadcast_pinned | menu | listings
+    ad_type: Mapped[str] = mapped_column(String, default="listings")
+    # Период показа: day | week | month (для удобства фильтра)
+    duration: Mapped[str] = mapped_column(String, default="day")
+    # Временные границы показа
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.utcnow)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Флаг закрепления (актуален для рассылки)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Частота показа в ленте (для listings), например каждые N показов
+    periodicity: Mapped[int] = mapped_column(Integer, default=1)
 
     # Связь с фотками (1 ко многим)
     photos = relationship(
