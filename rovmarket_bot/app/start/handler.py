@@ -15,19 +15,6 @@ router = Router()
 logger = get_component_logger("start")
 
 
-def escape_markdown(text: str) -> str:
-    """Escape Telegram Markdown special characters.
-    This targets classic Markdown (not V2): _, *, `, [, ] and parentheses.
-    """
-    if not text:
-        return text
-    # Backslash first
-    text = text.replace("\\", "\\\\")
-    for ch in ("_", "*", "`", "[", "]", "(", ")"):
-        text = text.replace(ch, f"\\{ch}")
-    return text
-
-
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     logger.info(
@@ -68,7 +55,7 @@ async def cmd_start(message: Message, state: FSMContext):
 Готов начать?
 Выбирай действие в меню ниже или напиши /help для справки.
     """,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=menu_start,
     )
     await message.answer("👇 Выберите действие:", reply_markup=menu_start_inline)
@@ -88,14 +75,13 @@ async def cmd_start(message: Message, state: FSMContext):
                     else:
                         item = InputMediaVideo(media=m.file_id)
                     if idx == 0:
-                        item.caption = escape_markdown(ad.text)
-                        item.parse_mode = "Markdown"
+                        item.caption = ad.text
                     media_group.append(item)
                 try:
                     await message.answer_media_group(media_group)
                 except Exception:
-                    await message.answer(escape_markdown(ad.text), parse_mode="Markdown")
+                    await message.answer(ad.text)
             else:
-                await message.answer(escape_markdown(ad.text), parse_mode="Markdown")
+                await message.answer(ad.text)
         # persist pointer changes
         await session.commit()
