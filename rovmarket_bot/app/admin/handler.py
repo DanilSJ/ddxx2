@@ -13,6 +13,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     InputMediaPhoto,
+    InputMediaVideo,
 )
 from sqlalchemy import or_
 
@@ -440,7 +441,12 @@ async def show_publication(callback: CallbackQuery):
         products = await get_unpublished_products(session)
 
     for product in products:
-        first_photo = product.photos[0].photo_url if product.photos else None
+        # Определяем первое медиа: фото или видео
+        first_media = None
+        if product.photos:
+            first_media = ("photo", product.photos[0].photo_url)
+        elif getattr(product, "videos", None):
+            first_media = ("video", product.videos[0].video_file_id)
 
         description = product.description or ""
         if len(description) > MAX_DESCRIPTION_LENGTH:
@@ -481,13 +487,21 @@ async def show_publication(callback: CallbackQuery):
         )
 
         try:
-            if first_photo:
-                await callback.message.answer_photo(
-                    first_photo,
-                    caption=caption,
-                    parse_mode="HTML",
-                    reply_markup=buttons,
-                )
+            if first_media:
+                if first_media[0] == "photo":
+                    await callback.message.answer_photo(
+                        first_media[1],
+                        caption=caption,
+                        parse_mode="HTML",
+                        reply_markup=buttons,
+                    )
+                else:
+                    await callback.message.answer_video(
+                        first_media[1],
+                        caption=caption,
+                        parse_mode="HTML",
+                        reply_markup=buttons,
+                    )
             else:
                 await callback.message.answer(
                     caption, parse_mode="HTML", reply_markup=buttons
@@ -504,11 +518,18 @@ async def show_photos_admin(callback: CallbackQuery):
     async with db_helper.session_factory() as session:
         product = await get_product_with_photos_and_user(session, product_id)
 
-    if not product or not product.photos:
-        await callback.answer("Фотографии не найдены", show_alert=True)
+    if not product or (not product.photos and not getattr(product, "videos", None)):
+        await callback.answer("Медиа не найдено", show_alert=True)
         return
 
-    media = [InputMediaPhoto(media=photo.photo_url) for photo in product.photos]
+    media = []
+    # Добавляем фото сначала
+    for photo in (product.photos or []):
+        media.append(InputMediaPhoto(media=photo.photo_url))
+    # Добавляем видео
+    if getattr(product, "videos", None):
+        for vid in product.videos:
+            media.append(InputMediaVideo(media=vid.video_file_id))
     try:
         await callback.message.answer_media_group(media)
     except Exception as e:
@@ -899,7 +920,12 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
     new_msg_ids = []
     for product in products:
         try:
-            first_photo = product.photos[0].photo_url if product.photos else None
+            # Превью: берём первое фото, иначе первое видео
+            first_media = None
+            if product.photos:
+                first_media = ("photo", product.photos[0].photo_url)
+            elif getattr(product, "videos", None):
+                first_media = ("video", product.videos[0].video_file_id)
             views = views_counts.get(product.id, 0)
             contact_text = (
                 "Связь через бота" if product.contact == "via_bot" else product.contact
@@ -931,13 +957,21 @@ async def all_ads_paginated(callback: CallbackQuery, state: FSMContext):
                     [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")],
                 ]
             )
-            if first_photo:
-                sent_msg = await callback.message.answer_photo(
-                    first_photo,
-                    caption=caption,
-                    parse_mode="HTML",
-                    reply_markup=buttons,
-                )
+            if first_media:
+                if first_media[0] == "photo":
+                    sent_msg = await callback.message.answer_photo(
+                        first_media[1],
+                        caption=caption,
+                        parse_mode="HTML",
+                        reply_markup=buttons,
+                    )
+                else:
+                    sent_msg = await callback.message.answer_video(
+                        first_media[1],
+                        caption=caption,
+                        parse_mode="HTML",
+                        reply_markup=buttons,
+                    )
             else:
                 sent_msg = await callback.message.answer(
                     caption, parse_mode="HTML", reply_markup=buttons
@@ -958,14 +992,23 @@ async def show_photos_published(callback: CallbackQuery):
     async with db_helper.session_factory() as session:
         product = await get_published_product_by_id(session, product_id)
 
-    if not product or not product.photos:
-        await callback.answer("Фотографии не найдены", show_alert=True)
+    if not product or (not product.photos and not getattr(product, "videos", None)):
+        await callback.answer("Медиа не найдено", show_alert=True)
         return
 
-    if len(product.photos) == 1:
-        await callback.message.answer_photo(product.photos[0].photo_url)
+    media = []
+    for photo in (product.photos or []):
+        media.append(InputMediaPhoto(media=photo.photo_url))
+    if getattr(product, "videos", None):
+        for vid in product.videos:
+            media.append(InputMediaVideo(media=vid.video_file_id))
+    # Если только один элемент — отправим отдельно с подписью нет
+    if len(media) == 1:
+        if isinstance(media[0], InputMediaPhoto):
+            await callback.message.answer_photo(media[0].media)
+        else:
+            await callback.message.answer_video(media[0].media)
     else:
-        media = [InputMediaPhoto(media=photo.photo_url) for photo in product.photos]
         await callback.message.answer_media_group(media)
     await callback.answer()
 

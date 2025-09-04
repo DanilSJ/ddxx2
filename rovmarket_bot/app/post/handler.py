@@ -38,6 +38,7 @@ class Post(StatesGroup):
     description = State()
     photo = State()
     photos: list = State()
+    videos: list = State()
     price = State()
     contact = State()
     geo = State()
@@ -236,14 +237,23 @@ async def process_description(message: Message, state: FSMContext):
         return
     await state.update_data(description=message.text)
     await message.answer(
-        "📸 Пришлите *до 10 фотографий* для вашего объявления.\n\n"
-        "📌 Вы можете отправлять фото как по одному, так и сразу в виде альбома.\n\n"
-        "⭐ Первое присланное фото будет главным и показываться первым в объявлении.\n\n"
+        "📸 Пришлите *до 10 фото или видео* для вашего объявления.\n\n"
+        "📌 Можно отправлять по одному сообщению или альбомом (смешанные фото/видео поддерживаются).\n\n"
+        "⭐ Первое присланное медиа будет главным и показываться первым в объявлении.\n\n"
         "⚠️ *Важно:* запрещён любой контент 18+, насилие, агрессия, оскорбления и другие неприемлемые материалы — такие фото будут удаляться, а аккаунт может быть заблокирован.\n\n"
-        "📍 Пожалуйста, отправляйте только качественные и релевантные вашему объявлению фотографии.\n\n"
-        "✅ Когда закончите, нажмите кнопку «Подтвердить»"
+        "📍 Пожалуйста, отправляйте только качественные и релевантные вашему объявлению материалы.\n\n"
+        "✅ Когда закончите, нажмите кнопку «Подтвердить»",      reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+    
+                [
+                    InlineKeyboardButton(
+                        text="Без фото/видео", callback_data="photos_skip"
+                    )
+                ]
+            ]
+        ),
     )
-    await state.update_data(photos=[])
+    await state.update_data(photos=[], videos=[])
     await state.set_state(Post.photo)
 
 
@@ -270,35 +280,69 @@ async def process_photo(
 ):
     data = await state.get_data()
     photos = data.get("photos", [])
+    videos = data.get("videos", [])
 
     messages = album_messages if album_messages else [message]
 
     for msg in messages:
-        if len(photos) >= 10:
-            await message.answer("📸 Вы уже добавили 10 фото. Нажмите «Подтвердить» ⬇️")
+        if (len(photos) + len(videos)) >= 10:
+            await message.answer("📸 Вы уже добавили 10 медиа. Нажмите «Подтвердить» ⬇️")
             break
 
-        photo_id = msg.photo[-1].file_id
-        photos.append(photo_id)
+        # Добавляем фото если есть, иначе попробуем видео (для смешанных альбомов)
+        if msg.photo and len(msg.photo) > 0:
+            photo_id = msg.photo[-1].file_id
+            photos.append(photo_id)
+        elif getattr(msg, "video", None):
+            videos.append(msg.video.file_id)
 
-    await state.update_data(photos=photos)
+    await state.update_data(photos=photos, videos=videos)
     logger.info(
-        "Photos added for user_id=%s count_now=%s", message.from_user.id, len(photos)
+        "Media added for user_id=%s photos=%s videos=%s", message.from_user.id, len(photos), len(videos)
     )
 
     await message.answer(
-        f"✅ Фото добавлено ({len(photos)}/10). Можно отправить ещё или нажмите 'Подтвердить'",
+        f"✅ Медиа добавлено ({len(photos)+len(videos)}/10). Можно отправить ещё или нажмите 'Подтвердить' или 'Без фото/видео'",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
                         text="✅ Подтвердить", callback_data="photos_done"
                     )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Без фото/видео", callback_data="photos_skip"
+                    )
                 ]
             ]
         ),
     )
 
+
+@router.message(
+    Post.photo,
+    F.video,
+    ~F.text.startswith("/"),
+    F.text != "🔔 Уведомления",
+    F.text != "📋 Меню",
+    F.text != "📱 Отправить номер телефона",
+    F.text != "🔙 Назад",
+    F.text != "🔍 Показать все",
+    F.text != "🎛 Фильтры",
+    F.text != "📂 Категории",
+    F.text != "⚙️ Настройки",
+    F.text != "📋 Мои объявления",
+    F.text != "📢 Разместить объявление",
+    F.text != "🔍 Найти объявление",
+)
+async def process_video(
+    message: Message,
+    state: FSMContext,
+    album_messages: list[Message] | None = None,
+):
+    # Делегируем в общий обработчик, который учитывает и фото, и видео
+    await process_photo(message, state, album_messages)
 
 @router.message(
     Post.photo,
@@ -317,12 +361,17 @@ async def process_photo(
 )
 async def photo_other_messages(message: Message):
     await message.answer(
-        "📷 Пожалуйста, отправляйте фото *по одному* сообщению.\n\nКогда закончите, нажмите кнопку «Подтвердить» ✅:",
+        "📷 Пожалуйста, отправляйте фото или видео. Когда закончите, нажмите «Подтвердить».\n\nЕсли хотите без медиа — нажмите «Без фото/видео».",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
                         text="✅ Подтвердить", callback_data="photos_done"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Без фото/видео", callback_data="photos_skip"
                     )
                 ]
             ]
@@ -334,9 +383,23 @@ async def photo_other_messages(message: Message):
 async def photos_done_callback(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     photos = data.get("photos", [])
-    if not photos:
-        await callback.answer("Вы не отправили ни одного фото", show_alert=True)
+    videos = data.get("videos", [])
+    if not photos and not videos:
+        await callback.answer("Вы не добавили медиа. Либо добавьте, либо нажмите «Без фото/видео».", show_alert=True)
         return
+    await callback.message.edit_reply_markup()
+    await callback.message.answer(
+        "💰 Укажите *цену* в рублях для вашего объявления (только цифры)\n💡 Если хотите указать *договорную* цену, нажмите кнопку ниже ⬇️",
+        reply_markup=contractual,
+    )
+    await state.set_state(Post.price)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "photos_skip")
+async def photos_skip_callback(callback: CallbackQuery, state: FSMContext):
+    # Явно очистим медиа и продолжим
+    await state.update_data(photos=[], videos=[])
     await callback.message.edit_reply_markup()
     await callback.message.answer(
         "💰 Укажите *цену* в рублях для вашего объявления (только цифры)\n💡 Если хотите указать *договорную* цену, нажмите кнопку ниже ⬇️",

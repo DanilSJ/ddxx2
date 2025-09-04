@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from redis.asyncio import Redis
-from rovmarket_bot.core.models import Product, ProductPhoto, User, Categories
+from rovmarket_bot.core.models import Product, ProductPhoto, ProductVideo, User, Categories
 from rovmarket_bot.core.cache import invalidate_all_ads_cache
 from rovmarket_bot.app.settings.crud import get_or_create_bot_settings
 from rovmarket_bot.core.logger import get_component_logger
@@ -79,9 +79,11 @@ async def create_product(
     await index_product_to_redis(product)
     logger.info("Product persisted id=%s for user_id=%s", product.id, user.id)
 
-    # Добавление фотографий
+    # Добавление медиа: фото и видео
     for file_id in data.get("photos", []):
         session.add(ProductPhoto(product_id=product.id, photo_url=file_id))
+    for file_id in data.get("videos", []):
+        session.add(ProductVideo(product_id=product.id, video_file_id=file_id))
 
     await session.commit()
     await invalidate_all_ads_cache()

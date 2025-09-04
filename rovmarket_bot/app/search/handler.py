@@ -24,6 +24,7 @@ import datetime
 from aiogram.types import InputMediaPhoto, InlineKeyboardMarkup, InlineKeyboardButton
 from rovmarket_bot.core.cache import check_rate_limit
 from rovmarket_bot.core.logger import get_component_logger
+from ..start.handler import cmd_start
 from ..start.keyboard import menu_start, menu_ad_inline_write
 from rovmarket_bot.app.advertisement.crud import get_next_listings_ad
 
@@ -123,7 +124,7 @@ async def button_search(message: Message, state: FSMContext):
 
 
 @router.message(F.text == "📣 Реклама")
-async def button_search(message: Message, state: FSMContext):
+async def button_advertisement(message: Message, state: FSMContext):
     await state.clear()
     text = (
         "✨ **Реклама в нашем боте** ✨\n\n"
@@ -135,15 +136,26 @@ async def button_search(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data == "menu_ad_inline_write_callback")
-async def button_search(message: Message, state: FSMContext):
+async def menu_ad_inline_write_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     text = (
-        "✨ **Реклама в нашем боте** ✨\n\n"
+        "✨ <b>Реклама в нашем боте</b> ✨\n\n"
         "🔹 Хотите рассказать о своём товаре или услуге нашей аудитории?\n"
         "🔹 Получите прямой доступ к активным пользователям.\n\n"
         "📬 Свяжитесь со мной для обсуждения условий размещения рекламы:"
     )
-    await message.answer(text, reply_markup=menu_ad_inline_write, parse_mode="Markdown")
+    try:
+        await callback.message.answer(
+            text, reply_markup=menu_ad_inline_write, parse_mode="HTML"
+        )
+    except Exception:
+        # Fallback: отправим двумя сообщениями без форматирования
+        await callback.message.answer("Реклама в нашем боте")
+        await callback.message.answer(
+            "Свяжитесь со мной для обсуждения условий",
+            reply_markup=menu_ad_inline_write,
+        )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "menu_search_inline_all_ads")
@@ -165,30 +177,7 @@ async def menu_search_inline_categories_ads(callback: CallbackQuery, state: FSMC
 async def menu_search_inline_menu(callback: CallbackQuery, state: FSMContext):
     message = callback.message
 
-    await state.clear()
-
-    await message.answer(
-        """Привет! 👋
-<b>Добро пожаловать в РовенМаркет</b> — маркетплейс прямо в Telegram.
-
-Здесь ты можешь:
-🛒 <b>Купить или продать любой товар</b>  
-📸 <b>Добавить объявление за пару кликов</b>  
-📍 <b>Смотреть предложения в своём районе</b>  
-🔔 <b>Получать уведомления о новых товарах</b>  
-💬 <b>Общаться анонимно через бота — не нужно указывать свои контакты в объявлении</b>
-
-Ты также можешь нажать на команды в тексте или написать:  
-/all_ads — чтобы посмотреть все объявления  
-/post — чтобы опубликовать своё объявление
-
-<b>Готов начать?</b>
-
-Выбери действие из меню ниже или нажми /help для справки.
-    """,
-        parse_mode="HTML",
-        reply_markup=menu_start,
-    )
+    await cmd_start(message, state)
 
 
 @router.message(F.text == "🔍 Показать все")
@@ -334,14 +323,27 @@ async def show_ads_page(message: Message, state: FSMContext, page: int):
                     ad = await get_next_listings_ad(session)
                     if ad:
                         ad_text = ad.text
-                        ad_photos = [p.file_id for p in (ad.photos or [])]
                         try:
-                            if ad_photos:
-                                await message.answer_photo(ad_photos[0], caption=ad_text)
+                            if getattr(ad, "media", None):
+                                from aiogram.types import (
+                                    InputMediaPhoto,
+                                    InputMediaVideo,
+                                )
+
+                                media_group = []
+                                for i, m in enumerate(ad.media[:10]):
+                                    if m.media_type == "photo":
+                                        item = InputMediaPhoto(media=m.file_id)
+                                    else:
+                                        item = InputMediaVideo(media=m.file_id)
+                                    if i == 0:
+                                        item.caption = ad_text
+                                    media_group.append(item)
+                                await message.answer_media_group(media_group)
                             else:
                                 await message.answer(ad_text)
                         except Exception:
-                            # Fallback to text if photo fails
+                            # Fallback to text if media fails
                             await message.answer(ad_text)
 
             await message.answer(
@@ -495,6 +497,7 @@ async def show_details(callback: CallbackQuery):
     )
 
     photos = product.get("photos", [])
+    videos = product.get("videos", [])
 
     await callback.answer()
 
@@ -524,31 +527,27 @@ async def show_details(callback: CallbackQuery):
 
     details_markup = InlineKeyboardMarkup(inline_keyboard=details_buttons)
     try:
-        if photos:
-            media = InputMediaPhoto(
-                media=photos[0], caption=full_text, parse_mode="HTML"
+        # Если исходное сообщение с фото/видео — редактируем подпись, иначе редактируем текст
+        if (
+            callback.message.photo
+            or callback.message.video
+            or callback.message.animation
+        ):
+            await callback.message.edit_caption(
+                caption=full_text, reply_markup=details_markup, parse_mode="HTML"
             )
-            await callback.message.edit_media(media=media, reply_markup=details_markup)
         else:
             await callback.message.edit_text(
                 full_text, reply_markup=details_markup, parse_mode="HTML"
             )
     except Exception:
         logger.warning(
-            "Failed to edit message for details product_id=%s, sending new message",
+            "Failed to edit in-place for details product_id=%s, sending new message",
             product_id,
         )
-        if photos:
-            await callback.message.answer_photo(
-                photos[0],
-                caption=full_text,
-                reply_markup=details_markup,
-                parse_mode="HTML",
-            )
-        else:
-            await callback.message.answer(
-                full_text, reply_markup=details_markup, parse_mode="HTML"
-            )
+        await callback.message.answer(
+            full_text, reply_markup=details_markup, parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data.startswith("show_photos:"))
@@ -608,25 +607,42 @@ async def show_photos(callback: CallbackQuery):
         f"🕒 Дата создания: {created_str}"
     )
 
-    photos = product.get("photos", [])[:10]  # максимум 10 фото
+    photos = product.get("photos", [])
+    videos = product.get("videos", [])
+    combo = [("photo", fid) for fid in photos] + [("video", fid) for fid in videos]
+    combo = combo[:10]
 
-    if not photos:
-        logger.info("Show photos: no photos product_id=%s", product_id)
-        await callback.answer("Фотографий нет", show_alert=True)
+    if not combo:
+        logger.info("Show media: none product_id=%s", product_id)
+        await callback.answer("Медиа нет", show_alert=True)
         return
-    if len(photos) == 1:
-        # Если фото одно, просто отправляем с подписью
+    if len(combo) == 1:
         await callback.answer()
-        await callback.message.answer_photo(
-            photos[0], caption=full_text, parse_mode="HTML"
-        )
+        kind, fid = combo[0]
+        if kind == "photo":
+            await callback.message.answer_photo(
+                fid, caption=full_text, parse_mode="HTML"
+            )
+        else:
+            await callback.message.answer_video(
+                fid, caption=full_text, parse_mode="HTML"
+            )
         return
 
-    # Формируем медиагруппу: первое фото с подписью, остальные без
-    media_group = [
-        InputMediaPhoto(media=photos[0], caption=full_text, parse_mode="HTML")
-    ]
-    media_group += [InputMediaPhoto(media=photo) for photo in photos[1:]]
+    # Формируем медиагруппу: первое с подписью, остальные без
+    from aiogram.types import InputMediaPhoto, InputMediaVideo
+
+    media_group = []
+    for idx, (kind, fid) in enumerate(combo):
+        item = (
+            InputMediaPhoto(media=fid)
+            if kind == "photo"
+            else InputMediaVideo(media=fid)
+        )
+        if idx == 0:
+            item.caption = full_text
+            item.parse_mode = "HTML"
+        media_group.append(item)
 
     await callback.answer()
     await callback.message.answer_media_group(media_group)

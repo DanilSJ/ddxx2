@@ -36,6 +36,13 @@ class Product(Base):
         lazy="joined",
     )
 
+    videos = relationship(
+        "ProductVideo",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        lazy="joined",
+    )
+
     description: Mapped[str] = mapped_column(String)
     price: Mapped[int | None] = mapped_column(nullable=True)
     contact: Mapped[str] = mapped_column(String)

@@ -9,7 +9,7 @@ from rovmarket_bot.core.models.user import User
 from rovmarket_bot.core.models.product_view import ProductView
 from rovmarket_bot.core.models.complaint import Complaint
 from rovmarket_bot.core.models.product import Product
-from rovmarket_bot.core.models.advertisement import Advertisement, AdPhoto
+from rovmarket_bot.core.models.advertisement import Advertisement, AdMedia
 from rovmarket_bot.core.models.categories import Categories
 from sqlalchemy.future import select
 
@@ -127,7 +127,7 @@ async def create_advertisement(
     await session.flush()  # чтобы получить id
 
     for file_id in photos_file_ids:
-        photo = AdPhoto(advertisement_id=ad.id, file_id=file_id)
+        photo = AdMedia(advertisement_id=ad.id, file_id=file_id, media_type="photo")
         session.add(photo)
 
     await session.commit()
@@ -139,9 +139,13 @@ async def get_unpublished_products(session: AsyncSession) -> list[Product]:
     result = await session.execute(
         select(Product)
         .where(Product.publication == None)
-        .options(selectinload(Product.photos), selectinload(Product.user))
+        .options(
+            selectinload(Product.photos),
+            selectinload(Product.videos),
+            selectinload(Product.user),
+        )
     )
-    return list(result.scalars().all())
+    return list(result.unique().scalars().all())
 
 
 # Принять объявление (publication = True)
@@ -176,6 +180,7 @@ async def get_product_with_photos(
         .where(Product.id == product_id)
         .options(
             selectinload(Product.photos),
+            selectinload(Product.videos),
             selectinload(Product.user),  # ✅ загружаем user заранее
         )
     )
@@ -197,7 +202,7 @@ async def get_published_products_page(
     result = await session.execute(
         select(Product)
         .where(Product.publication == True)
-        .options(selectinload(Product.photos), selectinload(Product.user))
+        .options(selectinload(Product.photos), selectinload(Product.videos), selectinload(Product.user))
         .order_by(Product.created_at.desc())
         .offset(offset)
         .limit(3)
@@ -211,7 +216,7 @@ async def get_published_product_by_id(
     result = await session.execute(
         select(Product)
         .where(Product.id == product_id, Product.publication == True)
-        .options(selectinload(Product.photos), selectinload(Product.user))
+        .options(selectinload(Product.photos), selectinload(Product.videos), selectinload(Product.user))
     )
     return result.unique().scalar_one_or_none()
 
@@ -237,7 +242,7 @@ async def get_product_with_photos_and_user(
     result = await session.execute(
         select(Product)
         .where(Product.id == product_id)
-        .options(selectinload(Product.photos), selectinload(Product.user))
+        .options(selectinload(Product.photos), selectinload(Product.videos), selectinload(Product.user))
     )
     return result.scalar_one_or_none()
 

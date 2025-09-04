@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import Sequence
-from rovmarket_bot.core.models.advertisement import Advertisement, AdPhoto
+from rovmarket_bot.core.models.advertisement import Advertisement, AdMedia
 from datetime import datetime, timedelta
 from rovmarket_bot.core.models.settings import BotSettings
 
@@ -46,10 +46,27 @@ async def create_advertisement(
 
 async def add_ad_photos(
     session: AsyncSession, *, advertisement_id: int, file_ids: Sequence[str]
-) -> list[AdPhoto]:
-    rows: list[AdPhoto] = []
+) -> list[AdMedia]:
+    rows: list[AdMedia] = []
     for fid in file_ids:
-        row = AdPhoto(advertisement_id=advertisement_id, file_id=fid)
+        row = AdMedia(advertisement_id=advertisement_id, file_id=fid, media_type="photo")
+        session.add(row)
+        rows.append(row)
+    await session.flush()
+    return rows
+
+
+async def add_ad_media(
+    session: AsyncSession, *, advertisement_id: int, media_items: list[tuple[str, str]]
+) -> list[AdMedia]:
+    """Add media files (photos and videos) to advertisement"""
+    rows: list[AdMedia] = []
+    for file_id, media_type in media_items:
+        row = AdMedia(
+            advertisement_id=advertisement_id, 
+            file_id=file_id,
+            media_type=media_type  # 'photo' or 'video'
+        )
         session.add(row)
         rows.append(row)
     await session.flush()
@@ -71,7 +88,7 @@ async def get_active_ads_by_type(
         .where(Advertisement.active == True)
         .where(Advertisement.starts_at <= now)
         .where((Advertisement.ends_at.is_(None)) | (Advertisement.ends_at >= now))
-        .options(selectinload(Advertisement.photos))
+        .options(selectinload(Advertisement.media))
         .order_by(order_col)
     )
     res = await session.execute(stmt)

@@ -72,17 +72,22 @@ async def main():
 
                         # prepare media/text
                         text = ad.text
-                        photos = [p.file_id for p in (ad.photos or [])]
                         sent = 0
                         for user in users:
                             try:
-                                if photos:
-                                    from aiogram.types import InputMediaPhoto
+                                if getattr(ad, "media", None):
+                                    from aiogram.types import InputMediaPhoto, InputMediaVideo
 
-                                    media = [InputMediaPhoto(media=photos[0], caption=text)]
-                                    for fid in photos[1:10]:
-                                        media.append(InputMediaPhoto(media=fid))
-                                    msgs = await bot.send_media_group(chat_id=user.telegram_id, media=media)
+                                    media_group = []
+                                    for idx, m in enumerate(ad.media[:10]):
+                                        if m.media_type == "photo":
+                                            item = InputMediaPhoto(media=m.file_id)
+                                        else:
+                                            item = InputMediaVideo(media=m.file_id)
+                                        if idx == 0:
+                                            item.caption = text
+                                        media_group.append(item)
+                                    msgs = await bot.send_media_group(chat_id=user.telegram_id, media=media_group)
                                     if ad.pinned and msgs:
                                         try:
                                             await bot.pin_chat_message(chat_id=user.telegram_id, message_id=msgs[0].message_id)

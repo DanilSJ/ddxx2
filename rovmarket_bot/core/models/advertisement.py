@@ -22,19 +22,21 @@ class Advertisement(Base):
     # Частота показа в ленте (для listings), например каждые N показов
     periodicity: Mapped[int] = mapped_column(Integer, default=1)
 
-    # Связь с фотками (1 ко многим)
-    photos = relationship(
-        "AdPhoto", back_populates="advertisement", cascade="all, delete-orphan"
+    # Связь с медиа (1 ко многим)
+    media = relationship(
+        "AdMedia", back_populates="advertisement", cascade="all, delete-orphan"
     )
 
 
-class AdPhoto(Base):
-    __tablename__ = "ad_photo"
+class AdMedia(Base):
+    __tablename__ = "ad_media"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     advertisement_id: Mapped[int] = mapped_column(
         ForeignKey("advertisement.id", ondelete="CASCADE")
     )
     file_id: Mapped[str] = mapped_column(String)
+    # Тип медиа: photo | video
+    media_type: Mapped[str] = mapped_column(String, default="photo")
 
-    advertisement = relationship("Advertisement", back_populates="photos")
+    advertisement = relationship("Advertisement", back_populates="media")

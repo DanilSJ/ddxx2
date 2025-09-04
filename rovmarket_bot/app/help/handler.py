@@ -11,7 +11,7 @@ logger = get_component_logger("help")
 
 
 @router.message(Command("help"))
-async def cmd_start(message: Message, state: FSMContext):
+async def cmd_help(message: Message, state: FSMContext):
     logger.info(
         "/help from user_id=%s username=%s",
         message.from_user.id,

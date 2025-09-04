@@ -6,6 +6,7 @@ from aiogram.types import (
     Message,
     CallbackQuery,
     InputMediaPhoto,
+    InputMediaVideo,
 )
 from html import escape
 
@@ -82,12 +83,14 @@ async def cmd_my_ads(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "menu_start_inline_my_ads")
 async def menu_start_inline_my_ads(callback: CallbackQuery, state: FSMContext):
-    await button_my_ads(callback.message, state)
+    # В callback нужно использовать callback.from_user.id, а не message.from_user.id
+    await button_my_ads(callback.message, state, user_id_override=callback.from_user.id)
 
 
 @router.message(F.text == "📋 Мои объявления")
-async def button_my_ads(message: Message, state: FSMContext):
-    allowed, retry_after = await check_rate_limit(message.from_user.id, "search_cmd")
+async def button_my_ads(message: Message, state: FSMContext, user_id_override: int | None = None):
+    user_id = user_id_override or message.from_user.id
+    allowed, retry_after = await check_rate_limit(user_id, "search_cmd")
     if not allowed:
         await message.answer(
             f"Слишком часто. Подождите {retry_after} сек и попробуйте снова."
@@ -98,16 +101,16 @@ async def button_my_ads(message: Message, state: FSMContext):
     async with db_helper.session_factory() as session:
         # Получаем объявления пользователя
         products = await get_user_products_paginated(
-            telegram_id=message.from_user.id, session=session, page=1, limit=5
+            telegram_id=user_id, session=session, page=1, limit=5
         )
 
         total_count = await get_user_products_count(
-            telegram_id=message.from_user.id, session=session
+            telegram_id=user_id, session=session
         )
         logger.info(
             "Loaded %s ads for user_id=%s (first page)",
             total_count,
-            message.from_user.id,
+            user_id,
         )
 
     if not products:
@@ -189,15 +192,29 @@ async def send_user_products(
             ]
         )
 
+        # Превью: первое фото, иначе первое видео
+        first_media = None
         if product.photos:
-            first_photo_url = product.photos[0].photo_url
+            first_media = ("photo", product.photos[0].photo_url)
+        elif getattr(product, "videos", None):
+            first_media = ("video", product.videos[0].video_file_id)
+
+        if first_media:
             try:
-                sent_message = await message.answer_photo(
-                    photo=first_photo_url,
-                    caption=caption,
-                    reply_markup=actions_keyboard,
-                    parse_mode="HTML",
-                )
+                if first_media[0] == "photo":
+                    sent_message = await message.answer_photo(
+                        photo=first_media[1],
+                        caption=caption,
+                        reply_markup=actions_keyboard,
+                        parse_mode="HTML",
+                    )
+                else:
+                    sent_message = await message.answer_video(
+                        video=first_media[1],
+                        caption=caption,
+                        reply_markup=actions_keyboard,
+                        parse_mode="HTML",
+                    )
             except TelegramBadRequest:
                 sent_message = await message.answer(
                     caption, reply_markup=actions_keyboard, parse_mode="HTML"
@@ -491,7 +508,7 @@ async def cancel_publish(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("show_photos_"))
 async def show_product_photos(callback: CallbackQuery):
-    """Показать все фотографии объявления медиа-группой."""
+    """Показать все медиа объявления (фото и видео) медиа-группой."""
     try:
         product_id = int(callback.data.split("_")[-1])
     except ValueError:
@@ -515,13 +532,13 @@ async def show_product_photos(callback: CallbackQuery):
         await callback.answer("Объявление не найдено", show_alert=False)
         return
 
-    if not product.photos:
+    if not product.photos and not getattr(product, "videos", None):
         logger.info(
-            "Show photos: no photos for product_id=%s (user_id=%s)",
+            "Show media: none for product_id=%s (user_id=%s)",
             product_id,
             callback.from_user.id,
         )
-        await callback.answer("Фотографии отсутствуют", show_alert=False)
+        await callback.answer("Медиа отсутствует", show_alert=False)
         return
 
     # Подготовим красивую подпись (HTML)
@@ -547,34 +564,35 @@ async def show_product_photos(callback: CallbackQuery):
         f"👥 <b>Просмотры:</b> {views_count}"
     )
 
-    # Собираем и отправляем медиа-группу (батчами по 10)
-    photo_urls = [p.photo_url for p in product.photos]
+    # Собираем и отправляем медиа-группу (батчами по 10), фото + видео
+    photos = [p.photo_url for p in (product.photos or [])]
+    videos = [v.video_file_id for v in (product.videos or [])]
+    combined = [("photo", x) for x in photos] + [("video", x) for x in videos]
 
-    if len(photo_urls) == 1:
+    if len(combined) == 1:
+        kind, fid = combined[0]
         try:
-            await callback.message.answer_photo(
-                photo=photo_urls[0], caption=full_caption, parse_mode="HTML"
-            )
+            if kind == "photo":
+                await callback.message.answer_photo(photo=fid, caption=full_caption, parse_mode="HTML")
+            else:
+                await callback.message.answer_video(video=fid, caption=full_caption, parse_mode="HTML")
         except TelegramBadRequest:
             await callback.message.answer(full_caption, parse_mode="HTML")
         await callback.answer()
         return
 
     first_batch = True
-    for start in range(0, len(photo_urls), 10):
-        chunk = photo_urls[start : start + 10]
+    for start in range(0, len(combined), 10):
+        chunk = combined[start : start + 10]
         media = []
-        for idx, url in enumerate(chunk):
+        for idx, (kind, fid) in enumerate(chunk):
+            item = InputMediaPhoto(media=fid) if kind == "photo" else InputMediaVideo(media=fid)
             if first_batch and idx == 0:
-                media.append(
-                    InputMediaPhoto(media=url, caption=full_caption, parse_mode="HTML")
-                )
-            else:
-                media.append(InputMediaPhoto(media=url))
+                item.caption = full_caption
+                item.parse_mode = "HTML"
+            media.append(item)
         try:
-            await callback.bot.send_media_group(
-                chat_id=callback.message.chat.id, media=media
-            )
+            await callback.bot.send_media_group(chat_id=callback.message.chat.id, media=media)
         except TelegramBadRequest:
             await callback.message.answer(full_caption, parse_mode="HTML")
         first_batch = False

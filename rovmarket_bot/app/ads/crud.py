@@ -12,6 +12,7 @@ async def get_user_products(telegram_id: int, session: AsyncSession):
         select(Product)
         .options(
             selectinload(Product.photos),
+            selectinload(Product.videos),
             selectinload(Product.category),
             selectinload(Product.user),
         )
@@ -21,7 +22,7 @@ async def get_user_products(telegram_id: int, session: AsyncSession):
     )
 
     result = await session.execute(stmt)
-    return result.scalars().all()
+    return result.unique().scalars().all()
 
 
 async def get_user_products_paginated(
@@ -34,6 +35,7 @@ async def get_user_products_paginated(
         select(Product)
         .options(
             selectinload(Product.photos),
+            selectinload(Product.videos),
             selectinload(Product.category),
             selectinload(Product.user),
             selectinload(Product.views),
@@ -46,7 +48,7 @@ async def get_user_products_paginated(
     )
 
     result = await session.execute(stmt)
-    return result.scalars().all()
+    return result.unique().scalars().all()
 
 
 async def get_user_products_count(telegram_id: int, session: AsyncSession):
@@ -143,6 +145,7 @@ async def get_user_product_with_photos(
         select(Product)
         .options(
             selectinload(Product.photos),
+            selectinload(Product.videos),
             selectinload(Product.category),
             selectinload(Product.user),
             selectinload(Product.views),
@@ -164,6 +167,7 @@ async def get_user_product_by_id(
         select(Product)
         .options(
             selectinload(Product.photos),
+            selectinload(Product.videos),
             selectinload(Product.category),
             selectinload(Product.user),
         )

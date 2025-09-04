@@ -28,7 +28,7 @@ duration_keyboard = InlineKeyboardMarkup(
 )
 
 
-confirm_photos_keyboard = InlineKeyboardMarkup(
+confirm_media_keyboard = InlineKeyboardMarkup(
     inline_keyboard=[[InlineKeyboardButton(text="✅ Подтвердить", callback_data="ad_photos_done")]]
 )
 

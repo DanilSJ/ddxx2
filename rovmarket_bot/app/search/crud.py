@@ -3,6 +3,7 @@ from sqlalchemy import func
 from rovmarket_bot.core.models import (
     ProductView,
     ProductPhoto,
+    ProductVideo,
     db_helper,
     Product,
     Categories,
@@ -79,6 +80,11 @@ async def get_product_by_id(product_id: int, session: AsyncSession) -> dict | No
     result = await session.execute(stmt)
     photos = [row[0] for row in result.all()]
 
+    # Видео
+    stmt = select(ProductVideo.video_file_id).where(ProductVideo.product_id == product_id)
+    result = await session.execute(stmt)
+    videos = [row[0] for row in result.all()]
+
     return {
         "id": product_id,
         "name": name,
@@ -88,6 +94,7 @@ async def get_product_by_id(product_id: int, session: AsyncSession) -> dict | No
         "geo": geo,
         "created_at": created_at,
         "photos": photos,
+        "videos": videos,
     }
 
 
