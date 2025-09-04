@@ -4,11 +4,12 @@ __all__ = [
     "Product",
     "ProductPhoto",
     "ProductView",
+    "ProductVideo",
     "Complaint",
     "Categories",
     "UserCategoryNotification",
     "Advertisement",
-    "AdPhoto",
+    "AdMedia",
     "BotSettings",
     "Chat",
     "ChatMessage",
@@ -30,9 +31,10 @@ from .categories import Categories
 from .user_category_notification import UserCategoryNotification
 from .product_photo import ProductPhoto
 from .product_view import ProductView
+from .product_video import ProductVideo
 from .complaint import Complaint
 from .advertisement import Advertisement
-from .advertisement import AdPhoto
+from .advertisement import AdMedia
 from .settings import BotSettings
 from .chat import Chat, ChatMessage
 from .chat_photo import ChatPhoto
