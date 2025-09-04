@@ -68,7 +68,15 @@ async def create_product(
         description=data["description"],
         user_id=user.id,
         category_id=category.id,
-        price=None if data["price"] == "Договорная цена" else int(data["price"]),
+        price=(
+            None
+            if (data.get("price") in (None, "", "Договорная цена"))
+            else (
+                int(data.get("price"))
+                if isinstance(data.get("price"), (int, float, str))
+                else None
+            )
+        ),
         contact=data["contact"],
         geo=geo_data,
         publication=publication_value,
